@@ -3,14 +3,31 @@
 Corresponde ao GET /questoes do backlog. A busca é delegada ao repositório.
 """
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_session
 from app.models import Questao
 from app.repositories import questao_repository
+from app.services import questao_service
 
 router = APIRouter(prefix="/questoes", tags=["questoes"])
+
+
+class AlternativaIn(BaseModel):
+    texto: str
+    correta: bool = False
+
+
+class CadastrarQuestaoRequest(BaseModel):
+    enunciado: str = Field(..., examples=["Qual é a raiz de 2x - 8 = 0?"])
+    serie: str = Field(..., examples=["9º ano"])
+    materia: str = Field(..., examples=["Matemática"])
+    conteudo: str = Field(..., examples=["Funções"])
+    nivel: str = Field(..., examples=["Fácil"])
+    adaptacoes: list[str] = []
+    alternativas: list[AlternativaIn]
 
 
 def _serializar(questao: Questao) -> dict:
@@ -53,3 +70,24 @@ def listar_questoes(
         limite=limite,
     )
     return [_serializar(q) for q in questoes]
+
+
+@router.post("")
+def cadastrar_questao(
+    req: CadastrarQuestaoRequest, sessao: Session = Depends(get_session)
+) -> dict:
+    """Cadastra uma única questão (formulário). Cria matéria/conteúdo se faltar."""
+    try:
+        questao = questao_service.cadastrar_questao(
+            sessao,
+            enunciado=req.enunciado,
+            serie=req.serie,
+            materia=req.materia,
+            conteudo=req.conteudo,
+            nivel=req.nivel,
+            alternativas=[a.model_dump() for a in req.alternativas],
+            adaptacoes=req.adaptacoes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _serializar(questao)
