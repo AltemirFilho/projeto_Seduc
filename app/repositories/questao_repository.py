@@ -13,6 +13,7 @@ def filtrar_questoes(
     *,
     serie: Optional[str] = None,
     materia: Optional[str] = None,
+    materias: Optional[Sequence[str]] = None,
     conteudos: Optional[Sequence[str]] = None,
     nivel: Optional[str] = None,
     adaptacoes: Optional[Sequence[str]] = None,
@@ -29,7 +30,9 @@ def filtrar_questoes(
 
     if serie:
         stmt = stmt.where(Serie.nome == serie)
-    if materia:
+    if materias:
+        stmt = stmt.where(Materia.nome.in_(list(materias)))
+    elif materia:
         stmt = stmt.where(Materia.nome == materia)
     if conteudos:
         stmt = stmt.where(Conteudo.nome.in_(list(conteudos)))

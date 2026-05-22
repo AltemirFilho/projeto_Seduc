@@ -34,7 +34,7 @@ class QuestaoProva:
 @dataclass
 class Prova:
     serie: str
-    materia: str
+    materias: list[str]
     total: int
     distribuicao_real: dict[str, int]
     questoes: list[QuestaoProva] = field(default_factory=list)
@@ -75,7 +75,8 @@ def gerar_prova(
     sessao: Session,
     *,
     serie: str,
-    materia: str,
+    materia: Optional[str] = None,
+    materias: Optional[Sequence[str]] = None,
     conteudos: Optional[Sequence[str]] = None,
     distribuicao: Optional[dict[str, float]] = None,
     quantidade: int = 10,
@@ -84,10 +85,12 @@ def gerar_prova(
 ) -> Prova:
     rng = random.Random(seed)
 
+    materias_filtro = list(materias) if materias else ([materia] if materia else [])
+
     candidatas = questao_repository.filtrar_questoes(
         sessao,
         serie=serie,
-        materia=materia,
+        materias=materias_filtro or None,
         conteudos=conteudos,
         adaptacoes=adaptacoes,
     )
@@ -95,7 +98,7 @@ def gerar_prova(
     if not candidatas:
         raise ValueError(
             "Nenhuma questão encontrada para os filtros informados. "
-            "Verifique série/matéria/conteúdos ou popule o banco."
+            "Verifique série/matérias/conteúdos ou popule o banco."
         )
 
     if distribuicao:
@@ -137,9 +140,13 @@ def gerar_prova(
             )
         )
 
+    materias_resultado = materias_filtro or sorted(
+        {q.materia for q in questoes_prova}
+    )
+
     return Prova(
         serie=serie,
-        materia=materia,
+        materias=materias_resultado,
         total=len(questoes_prova),
         distribuicao_real=contagem_nivel,
         questoes=questoes_prova,

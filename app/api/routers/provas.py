@@ -10,7 +10,8 @@ router = APIRouter(prefix="/provas", tags=["provas"])
 
 class GerarProvaRequest(BaseModel):
     serie: str = Field(..., examples=["9º ano"])
-    materia: str = Field(..., examples=["Matemática"])
+    materia: str | None = Field(None, examples=["Matemática"])
+    materias: list[str] | None = Field(None, examples=[["Matemática", "Português"]])
     conteudos: list[str] | None = Field(None, examples=[["Funções", "Equação do 2º grau"]])
     distribuicao: dict[str, float] | None = Field(
         None,
@@ -32,6 +33,7 @@ def gerar_prova(
             sessao,
             serie=req.serie,
             materia=req.materia,
+            materias=req.materias,
             conteudos=req.conteudos,
             distribuicao=req.distribuicao,
             quantidade=req.quantidade,
@@ -42,8 +44,18 @@ def gerar_prova(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     return {
+        "parametros": {
+            "serie": req.serie,
+            "materia": req.materia,
+            "materias": req.materias,
+            "conteudos": req.conteudos,
+            "distribuicao": req.distribuicao,
+            "quantidade": req.quantidade,
+            "adaptacoes": req.adaptacoes,
+            "seed": req.seed,
+        },
         "serie": prova.serie,
-        "materia": prova.materia,
+        "materias": prova.materias,
         "total": prova.total,
         "distribuicao_real": prova.distribuicao_real,
         "questoes": [
@@ -51,6 +63,7 @@ def gerar_prova(
                 "ordem": q.ordem,
                 "questao_id": q.questao_id,
                 "enunciado": q.enunciado,
+                "materia": q.materia,
                 "conteudo": q.conteudo,
                 "nivel": q.nivel,
                 "alternativas": [
