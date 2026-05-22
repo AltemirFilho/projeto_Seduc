@@ -176,6 +176,27 @@
       <button id="btn-atualizar" style="margin-top:0">Atualizar lista</button>
       <div id="lista-questoes" class="lista-q"></div>
     </section>
+
+    <!-- CICLO DE SIMULADO -->
+    <section class="card full">
+      <h2>4. Ciclo de simulado — do gestor ao aluno</h2>
+      <p class="sub">Fluxo completo: o gestor cria e gera, libera para a turma, o aluno responde e o sistema corrige automaticamente.</p>
+      <div class="linha">
+        <div>
+          <label>Matéria</label>
+          <select id="sim-materia"></select>
+        </div>
+        <div>
+          <label>Quantidade</label>
+          <input type="number" id="sim-qtd" value="5" min="1" max="20" />
+        </div>
+        <div style="display:flex; align-items:flex-end;">
+          <button id="btn-sim-criar" style="margin:0; width:100%;">1 · Criar e gerar (gestor)</button>
+        </div>
+      </div>
+      <div id="sim-status"></div>
+      <div id="sim-area"></div>
+    </section>
   </main>
 
   <script>
@@ -217,6 +238,9 @@
       const selMat = document.getElementById("prova-materia");
       if (materias.length) opcoes(selMat, materias);
       else selMat.innerHTML = '<option value="Matemática">Matemática</option>';
+      const selSimMat = document.getElementById("sim-materia");
+      if (materias.length) opcoes(selSimMat, materias);
+      else selSimMat.innerHTML = '<option value="Matemática">Matemática</option>';
       // pré-seleciona 9º ano se existir
       const s9 = series.find((s) => s.nome.includes("9"));
       if (s9) document.getElementById("prova-serie").value = s9.nome;
@@ -295,6 +319,99 @@
       }
     }
     document.getElementById("btn-atualizar").addEventListener("click", carregarQuestoes);
+
+    // ---- ciclo de simulado ----
+    const simState = { ids: null, simuladoId: null, questoes: [] };
+
+    async function prepararDemo() {
+      if (!simState.ids) simState.ids = await postJSON("/demo/preparar", {});
+      return simState.ids;
+    }
+
+    document.getElementById("btn-sim-criar").addEventListener("click", async () => {
+      const status = document.getElementById("sim-status");
+      const area = document.getElementById("sim-area");
+      area.innerHTML = "";
+      status.innerHTML = '<div class="aviso ok">Preparando estrutura (escola, turma, gestor e aluno)...</div>';
+      try {
+        const ids = await prepararDemo();
+        const criado = await postJSON("/simulados", {
+          gestor_id: ids.gestor_id,
+          turma_id: ids.turma_id,
+          titulo: "Simulado Demo — " + ids.serie,
+          serie: ids.serie,
+          materia: document.getElementById("sim-materia").value,
+          quantidade: Number(document.getElementById("sim-qtd").value),
+          distribuicao: { "Fácil": 0.3, "Médio": 0.5, "Difícil": 0.2 },
+        });
+        const gerado = await postJSON("/simulados/" + criado.id + "/gerar", {});
+        simState.simuladoId = gerado.id;
+        status.innerHTML =
+          `<div class="aviso ok">Simulado #${gerado.id} criado e gerado · status <strong>${gerado.status}</strong> · ${gerado.total_questoes} questões · turma ${ids.turma} (${ids.serie})</div>` +
+          '<button class="verde" id="btn-sim-liberar">2 · Liberar para os alunos</button>';
+        document.getElementById("btn-sim-liberar").addEventListener("click", liberarSim);
+      } catch (e) {
+        status.innerHTML = `<div class="aviso erro">${e.message}</div>`;
+      }
+    });
+
+    async function liberarSim() {
+      const status = document.getElementById("sim-status");
+      try {
+        const lib = await postJSON("/simulados/" + simState.simuladoId + "/liberar", {});
+        status.innerHTML = `<div class="aviso ok">Simulado #${lib.id} · status <strong>${lib.status}</strong> — o aluno já pode responder abaixo</div>`;
+        const dados = await getJSON("/simulados/" + simState.simuladoId + "/questoes");
+        renderQuestoesAluno(dados.questoes);
+      } catch (e) {
+        status.innerHTML = `<div class="aviso erro">${e.message}</div>`;
+      }
+    }
+
+    function renderQuestoesAluno(questoes) {
+      const area = document.getElementById("sim-area");
+      simState.questoes = questoes;
+      let html = '<h3 style="margin-top:18px; color:var(--azul);">Visão do aluno — responda as questões</h3>';
+      questoes.forEach((q) => {
+        html += `<div class="questao"><div class="meta">Q${q.ordem} · ${q.conteudo} ${tagNivel(q.nivel)}</div>`;
+        html += `<div class="enun">${q.enunciado}</div>`;
+        q.alternativas.forEach((a) => {
+          html += `<label class="alt-linha" style="cursor:pointer;"><input type="radio" name="simq${q.questao_id}" value="${a.alternativa_id}" /> <span style="white-space:normal">${a.letra}) ${a.texto}</span></label>`;
+        });
+        html += `</div>`;
+      });
+      html += '<button class="verde" id="btn-sim-finalizar">3 · Finalizar e corrigir</button>';
+      area.innerHTML = html;
+      document.getElementById("btn-sim-finalizar").addEventListener("click", finalizarSim);
+    }
+
+    async function finalizarSim() {
+      const area = document.getElementById("sim-area");
+      try {
+        for (const q of simState.questoes) {
+          const escolhida = document.querySelector(`input[name="simq${q.questao_id}"]:checked`);
+          if (!escolhida) continue;
+          await postJSON("/respostas", {
+            aluno_id: simState.ids.aluno_id,
+            simulado_id: simState.simuladoId,
+            questao_id: q.questao_id,
+            alternativa_id: Number(escolhida.value),
+          });
+        }
+        const resultado = await postJSON("/simulados/" + simState.simuladoId + "/finalizar", {});
+        let html = '<div class="gabarito" style="background:#e6f5ec; font-size:1rem;">';
+        if (resultado.resultados.length === 0) {
+          html += "Nenhuma resposta foi registrada — selecione alternativas antes de finalizar.";
+        } else {
+          resultado.resultados.forEach((r) => {
+            html += `✅ <strong>Nota ${r.nota}</strong> — ${r.acertos}/${r.total_questoes} acertos (${r.respondidas} respondidas)`;
+          });
+        }
+        html += '</div>';
+        area.insertAdjacentHTML("beforeend", html);
+      } catch (e) {
+        area.insertAdjacentHTML("beforeend", `<div class="aviso erro">${e.message}</div>`);
+      }
+    }
 
     // ---- init ----
     (async () => {

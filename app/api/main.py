@@ -20,6 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
 from app.api.routers import (
+    demo,
     etiquetas,
     importacao,
     provas,
@@ -52,6 +53,7 @@ app.include_router(importacao.router)
 app.include_router(provas.router)
 app.include_router(simulados.router)
 app.include_router(respostas.router)
+app.include_router(demo.router)
 
 # main.py está em app/api/, então sobe dois níveis até app/ e entra em static/
 _DEMO_PATH = Path(__file__).resolve().parent.parent / "static" / "demo.html"
