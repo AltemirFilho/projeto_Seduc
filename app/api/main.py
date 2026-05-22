@@ -13,7 +13,7 @@ Documentação interativa (Swagger) gerada automaticamente:
 
 from fastapi import FastAPI
 
-from app.api.routers import etiquetas, provas, questoes
+from app.api.routers import etiquetas, importacao, provas, questoes
 
 app = FastAPI(
     title="SEDUC Simulados — API do Banco de Questões",
@@ -26,6 +26,7 @@ app = FastAPI(
 
 app.include_router(etiquetas.router)
 app.include_router(questoes.router)
+app.include_router(importacao.router)
 app.include_router(provas.router)
 
 
