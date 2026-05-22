@@ -1,13 +1,3 @@
-"""Endpoint de apoio à DEMONSTRAÇÃO.
-
-Prepara (de forma idempotente) a estrutura mínima necessária para demonstrar
-o ciclo de simulado: uma escola, uma turma de 9º ano, um gestor e um aluno.
-Retorna os IDs para a página de demonstração usar.
-
-Obs.: é um utilitário de demo/bootstrap — em produção a estrutura viria do
-cadastro real de escolas/turmas/usuários (Épico 2).
-"""
-
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session

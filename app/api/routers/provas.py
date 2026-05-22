@@ -1,9 +1,3 @@
-"""Endpoint de GERAÇÃO DE PROVA.
-
-Corresponde ao POST /simulados/:id/gerar do backlog (versão clássica/fallback).
-Recebe os parâmetros do gestor e devolve a prova montada e embaralhada.
-"""
-
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -33,7 +27,6 @@ def gerar_prova(
     req: GerarProvaRequest,
     sessao: Session = Depends(get_session),
 ) -> dict:
-    """Gera uma prova balanceada a partir do banco de questões."""
     try:
         prova = prova_service.gerar_prova(
             sessao,

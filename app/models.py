@@ -21,12 +21,7 @@ from app.database import Base
 from app.enums import PerfilUsuario, StatusSimulado
 
 
-# ---------------- ETIQUETAS ----------------
-
-
 class Serie(Base):
-    """Série/ano escolar. Ex.: '6º ano', '9º ano', '3ª série EM'."""
-
     __tablename__ = "series"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -39,8 +34,6 @@ class Serie(Base):
 
 
 class Materia(Base):
-    """Disciplina. Ex.: 'Matemática', 'Português', 'Ciências'."""
-
     __tablename__ = "materias"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -57,8 +50,6 @@ class Materia(Base):
 
 
 class Conteudo(Base):
-    """Tópico dentro de uma matéria. Ex.: 'Equação do 1º grau' em Matemática."""
-
     __tablename__ = "conteudos"
     __table_args__ = (
         UniqueConstraint("nome", "materia_id", name="uq_conteudo_nome_materia"),
@@ -79,8 +70,6 @@ class Conteudo(Base):
 
 
 class Nivel(Base):
-    """Dificuldade. Ex.: 'Fácil', 'Médio', 'Difícil'."""
-
     __tablename__ = "niveis"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -90,9 +79,6 @@ class Nivel(Base):
 
     def __repr__(self) -> str:
         return f"Nivel(id={self.id}, nome={self.nome!r})"
-
-
-# ---------------- BLOCO QUESTÃO ----------------
 
 
 class Questao(Base):
@@ -107,8 +93,6 @@ class Questao(Base):
     conteudo_id: Mapped[int] = mapped_column(ForeignKey("conteudos.id"), nullable=False)
     nivel_id: Mapped[int] = mapped_column(ForeignKey("niveis.id"), nullable=False)
 
-    # Lista de strings, ex.: ["tdah", "dislexia"]. SQLite armazena como TEXT;
-    # no PostgreSQL vira JSONB sem mexer no código (SQLAlchemy abstrai).
     adaptacoes: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
 
     criada_em: Mapped[datetime] = mapped_column(
@@ -156,9 +140,6 @@ class Alternativa(Base):
         )
 
 
-# ---------------- USUÁRIOS E ESTRUTURA ESCOLAR ----------------
-
-
 class Usuario(Base):
     __tablename__ = "usuarios"
 
@@ -203,7 +184,7 @@ class Turma(Base):
     escola_id: Mapped[int] = mapped_column(ForeignKey("escolas.id"), nullable=False)
     serie_id: Mapped[int] = mapped_column(ForeignKey("series.id"), nullable=False)
     ano_letivo: Mapped[int] = mapped_column(Integer, nullable=False)
-    nome: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)  # ex.: "9A"
+    nome: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
 
     escola: Mapped["Escola"] = relationship(back_populates="turmas")
     serie: Mapped["Serie"] = relationship()
@@ -222,7 +203,6 @@ class Aluno(Base):
         ForeignKey("usuarios.id"), unique=True, nullable=False
     )
     turma_id: Mapped[int] = mapped_column(ForeignKey("turmas.id"), nullable=False)
-    # Adaptações cognitivas do aluno, ex.: ["tdah", "dislexia"]
     perfil_cognitivo: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
 
     usuario: Mapped["Usuario"] = relationship(back_populates="aluno")
@@ -233,9 +213,6 @@ class Aluno(Base):
         return f"Aluno(id={self.id}, usuario_id={self.usuario_id}, turma_id={self.turma_id})"
 
 
-# ---------------- SIMULADOS E RESPOSTAS ----------------
-
-
 class Simulado(Base):
     __tablename__ = "simulados"
 
@@ -243,7 +220,6 @@ class Simulado(Base):
     gestor_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), nullable=False)
     turma_id: Mapped[int] = mapped_column(ForeignKey("turmas.id"), nullable=False)
     titulo: Mapped[str] = mapped_column(String(160), nullable=False)
-    # Parâmetros usados na geração (série, matéria, distribuição, etc.)
     parametros_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     status: Mapped[StatusSimulado] = mapped_column(
         SAEnum(StatusSimulado), default=StatusSimulado.RASCUNHO, nullable=False
@@ -266,14 +242,6 @@ class Simulado(Base):
 
 
 class SimuladoQuestao(Base):
-    """Liga uma questão a um simulado e congela a ordem das alternativas.
-
-    `alternativas_ordem` é a sequência de alternativa_id sorteada para esta
-    aplicação. Assim a ordem é embaralhada por simulado SEM desvincular a
-    alternativa do seu cabeçalho (a fonte da verdade continua na tabela
-    alternativas).
-    """
-
     __tablename__ = "simulado_questoes"
     __table_args__ = (
         UniqueConstraint("simulado_id", "questao_id", name="uq_simulado_questao"),

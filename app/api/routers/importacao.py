@@ -1,10 +1,3 @@
-"""Endpoint de IMPORTAÇÃO de questões: POST /questoes/import (Épico 3 — T-01).
-
-Recebe o JSON da SEDUC e devolve o relatório de importação.
-A validação é feita questão a questão (ver app/services/importacao_service.py),
-então um item inválido NÃO derruba o lote inteiro.
-"""
-
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -48,7 +41,6 @@ def importar_questoes(
     req: ImportarQuestoesRequest,
     sessao: Session = Depends(get_session),
 ) -> dict:
-    """Importa um lote de questões em JSON e retorna o relatório."""
     try:
         relatorio = importacao_service.importar_questoes(
             sessao, {"questoes": req.questoes}
