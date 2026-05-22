@@ -15,7 +15,7 @@ class ResponderRequest(BaseModel):
     alternativa_id: int
 
 
-@router.post("")
+@router.post("", summary="Salvar resposta do aluno (autosave)")
 def responder(req: ResponderRequest, sessao: Session = Depends(get_session)) -> dict:
     try:
         resposta = simulado_service.registrar_resposta(

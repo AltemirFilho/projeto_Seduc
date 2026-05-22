@@ -23,7 +23,7 @@ class GerarProvaRequest(BaseModel):
     seed: int | None = Field(None, description="Fixa o sorteio para reproduzir o resultado")
 
 
-@router.post("/gerar")
+@router.post("/gerar", summary="Gerar prova avulsa (sorteio balanceado + embaralhamento)")
 def gerar_prova(
     req: GerarProvaRequest,
     sessao: Session = Depends(get_session),

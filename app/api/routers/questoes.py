@@ -46,7 +46,7 @@ def _serializar(questao: Questao) -> dict:
     }
 
 
-@router.get("")
+@router.get("", summary="Listar e filtrar questões do banco")
 def listar_questoes(
     serie: str | None = Query(None, description="Ex.: '9º ano'"),
     materia: str | None = Query(None, description="Ex.: 'Matemática'"),
@@ -66,7 +66,7 @@ def listar_questoes(
     return [_serializar(q) for q in questoes]
 
 
-@router.post("")
+@router.post("", summary="Cadastrar uma questão")
 def cadastrar_questao(
     req: CadastrarQuestaoRequest, sessao: Session = Depends(get_session)
 ) -> dict:

@@ -36,7 +36,7 @@ class ImportarQuestoesRequest(BaseModel):
     )
 
 
-@router.post("/import")
+@router.post("/import", summary="Importar questões em lote (JSON da SEDUC)")
 def importar_questoes(
     req: ImportarQuestoesRequest,
     sessao: Session = Depends(get_session),

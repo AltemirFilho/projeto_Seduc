@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
 from app.api.routers import (
+    auth,
     demo,
     etiquetas,
     importacao,
@@ -30,6 +31,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
 app.include_router(etiquetas.router)
 app.include_router(questoes.router)
 app.include_router(importacao.router)

@@ -9,7 +9,7 @@ from app.models import Aluno, Escola, Serie, Turma, Usuario
 router = APIRouter(prefix="/demo", tags=["demo"])
 
 
-@router.post("/preparar")
+@router.post("/preparar", summary="Preparar dados de demonstração (escola, turma, gestor, aluno)")
 def preparar_estrutura(sessao: Session = Depends(get_session)) -> dict:
     serie = sessao.scalar(select(Serie).where(Serie.nome == "9º ano")) or sessao.scalar(
         select(Serie).order_by(Serie.id)
