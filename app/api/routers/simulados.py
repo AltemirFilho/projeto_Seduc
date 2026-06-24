@@ -1,19 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_session
+from app.api.deps import get_session, obter_usuario_atual, require_gestor
+from app.models import Usuario
 from app.services import simulado_service
 
 router = APIRouter(prefix="/simulados", tags=["simulados"])
 
 
 class CriarSimuladoRequest(BaseModel):
-    gestor_id: int
     turma_id: int
     titulo: str = Field(..., examples=["Simulado de Matemática - 9º ano"])
     serie: str = Field(..., examples=["9º ano"])
-    materia: str = Field(..., examples=["Matemática"])
+    materia: str | None = Field(None, examples=["Matemática"])
+    materias: list[str] | None = Field(None, examples=[["Matemática", "Português"]])
     conteudos: list[str] | None = None
     distribuicao: dict[str, float] | None = Field(
         None, examples=[{"Fácil": 0.3, "Médio": 0.5, "Difícil": 0.2}]
@@ -39,13 +40,16 @@ def _resumo(simulado) -> dict:
     }
 
 
-@router.post("")
+@router.post("", status_code=status.HTTP_201_CREATED, summary="Criar simulado (gestor)")
 def criar_simulado(
-    req: CriarSimuladoRequest, sessao: Session = Depends(get_session)
+    req: CriarSimuladoRequest,
+    usuario: Usuario = Depends(require_gestor),
+    sessao: Session = Depends(get_session),
 ) -> dict:
     parametros = {
         "serie": req.serie,
         "materia": req.materia,
+        "materias": req.materias,
         "conteudos": req.conteudos,
         "distribuicao": req.distribuicao,
         "quantidade": req.quantidade,
@@ -54,7 +58,7 @@ def criar_simulado(
     }
     simulado = simulado_service.criar_simulado(
         sessao,
-        gestor_id=req.gestor_id,
+        gestor_id=usuario.id,
         turma_id=req.turma_id,
         titulo=req.titulo,
         parametros=parametros,
@@ -62,86 +66,92 @@ def criar_simulado(
     return _resumo(simulado)
 
 
-@router.post("/{simulado_id}/gerar")
+@router.post("/{simulado_id}/gerar", summary="Gerar e persistir as questões (gestor)")
 def gerar(
-    simulado_id: int, req: GerarRequest, sessao: Session = Depends(get_session)
+    simulado_id: int,
+    req: GerarRequest,
+    usuario: Usuario = Depends(require_gestor),
+    sessao: Session = Depends(get_session),
 ) -> dict:
-    try:
-        simulado = simulado_service.gerar_e_persistir(
-            sessao, simulado_id=simulado_id, seed=req.seed
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    simulado = simulado_service.gerar_e_persistir(
+        sessao, simulado_id=simulado_id, seed=req.seed
+    )
     return _resumo(simulado)
 
 
-@router.get("/{simulado_id}/preview")
+@router.get(
+    "/{simulado_id}/preview",
+    summary="Prévia COM gabarito (gestor)",
+    dependencies=[Depends(require_gestor)],
+)
 def preview(simulado_id: int, sessao: Session = Depends(get_session)) -> dict:
-    try:
-        questoes = simulado_service.montar_questoes(
-            sessao, simulado_id=simulado_id, incluir_gabarito=True
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return {"simulado_id": simulado_id, "questoes": questoes}
-
-
-@router.post("/{simulado_id}/liberar")
-def liberar(simulado_id: int, sessao: Session = Depends(get_session)) -> dict:
-    try:
-        simulado = simulado_service.liberar(sessao, simulado_id=simulado_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return _resumo(simulado)
-
-
-@router.get("/{simulado_id}/questoes")
-def questoes_do_aluno(
-    simulado_id: int, sessao: Session = Depends(get_session)
-) -> dict:
-    try:
-        questoes = simulado_service.montar_questoes(
-            sessao, simulado_id=simulado_id, incluir_gabarito=False
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return {"simulado_id": simulado_id, "questoes": questoes}
-
-
-@router.post("/{simulado_id}/finalizar")
-def finalizar(simulado_id: int, sessao: Session = Depends(get_session)) -> dict:
-    try:
-        return simulado_service.finalizar_e_corrigir(sessao, simulado_id=simulado_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@router.delete("/{simulado_id}/questoes/{questao_id}")
-def remover_questao(
-    simulado_id: int, questao_id: int, sessao: Session = Depends(get_session)
-) -> dict:
-    try:
-        simulado_service.remover_questao(
-            sessao, simulado_id=simulado_id, questao_id=questao_id
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
     questoes = simulado_service.montar_questoes(
         sessao, simulado_id=simulado_id, incluir_gabarito=True
     )
     return {"simulado_id": simulado_id, "questoes": questoes}
 
 
-@router.post("/{simulado_id}/questoes/{questao_id}/trocar")
+@router.post(
+    "/{simulado_id}/liberar",
+    summary="Liberar para os alunos (gestor)",
+    dependencies=[Depends(require_gestor)],
+)
+def liberar(simulado_id: int, sessao: Session = Depends(get_session)) -> dict:
+    simulado = simulado_service.liberar(sessao, simulado_id=simulado_id)
+    return _resumo(simulado)
+
+
+@router.get(
+    "/{simulado_id}/questoes",
+    summary="Questões do simulado SEM gabarito (visão do aluno)",
+    dependencies=[Depends(obter_usuario_atual)],
+)
+def questoes_do_aluno(
+    simulado_id: int, sessao: Session = Depends(get_session)
+) -> dict:
+    questoes = simulado_service.montar_questoes(
+        sessao, simulado_id=simulado_id, incluir_gabarito=False
+    )
+    return {"simulado_id": simulado_id, "questoes": questoes}
+
+
+@router.post(
+    "/{simulado_id}/finalizar",
+    summary="Finalizar e corrigir (gestor)",
+    dependencies=[Depends(require_gestor)],
+)
+def finalizar(simulado_id: int, sessao: Session = Depends(get_session)) -> dict:
+    return simulado_service.finalizar_e_corrigir(sessao, simulado_id=simulado_id)
+
+
+@router.delete(
+    "/{simulado_id}/questoes/{questao_id}",
+    summary="Remover uma questão do simulado (gestor, antes de liberar)",
+    dependencies=[Depends(require_gestor)],
+)
+def remover_questao(
+    simulado_id: int, questao_id: int, sessao: Session = Depends(get_session)
+) -> dict:
+    simulado_service.remover_questao(
+        sessao, simulado_id=simulado_id, questao_id=questao_id
+    )
+    questoes = simulado_service.montar_questoes(
+        sessao, simulado_id=simulado_id, incluir_gabarito=True
+    )
+    return {"simulado_id": simulado_id, "questoes": questoes}
+
+
+@router.post(
+    "/{simulado_id}/questoes/{questao_id}/trocar",
+    summary="Trocar uma questão por outra equivalente (gestor, antes de liberar)",
+    dependencies=[Depends(require_gestor)],
+)
 def trocar_questao(
     simulado_id: int, questao_id: int, sessao: Session = Depends(get_session)
 ) -> dict:
-    try:
-        simulado_service.trocar_questao(
-            sessao, simulado_id=simulado_id, questao_id=questao_id
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    simulado_service.trocar_questao(
+        sessao, simulado_id=simulado_id, questao_id=questao_id
+    )
     questoes = simulado_service.montar_questoes(
         sessao, simulado_id=simulado_id, incluir_gabarito=True
     )

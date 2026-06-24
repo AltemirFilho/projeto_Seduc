@@ -6,11 +6,19 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.enums import StatusSimulado
+from app.exceptions import DadosInvalidos, NaoEncontrado, RegraNegocio
 from app.models import Alternativa, Resposta, Simulado, SimuladoQuestao
 from app.repositories import questao_repository
 from app.services import prova_service
 
 LETRAS = "ABCDE"
+
+
+def _obter_simulado(sessao: Session, simulado_id: int) -> Simulado:
+    simulado = sessao.get(Simulado, simulado_id)
+    if simulado is None:
+        raise NaoEncontrado(f"simulado {simulado_id} não encontrado")
+    return simulado
 
 
 def criar_simulado(
@@ -37,22 +45,21 @@ def criar_simulado(
 def gerar_e_persistir(
     sessao: Session, *, simulado_id: int, seed: int | None = None
 ) -> Simulado:
-    simulado = sessao.get(Simulado, simulado_id)
-    if simulado is None:
-        raise ValueError(f"simulado {simulado_id} não encontrado")
+    simulado = _obter_simulado(sessao, simulado_id)
     if simulado.status not in (StatusSimulado.RASCUNHO, StatusSimulado.GERADO):
-        raise ValueError(
+        raise RegraNegocio(
             f"simulado não pode ser gerado no status '{simulado.status.value}'"
         )
 
     p = simulado.parametros_json or {}
-    if not p.get("serie") or not p.get("materia"):
-        raise ValueError("parâmetros do simulado precisam de 'serie' e 'materia'")
+    if not p.get("serie") or not (p.get("materia") or p.get("materias")):
+        raise DadosInvalidos("parâmetros do simulado precisam de 'serie' e 'materia(s)'")
 
     prova = prova_service.gerar_prova(
         sessao,
         serie=p["serie"],
-        materia=p["materia"],
+        materia=p.get("materia"),
+        materias=p.get("materias"),
         conteudos=p.get("conteudos"),
         distribuicao=p.get("distribuicao"),
         quantidade=p.get("quantidade", 10),
@@ -79,11 +86,9 @@ def gerar_e_persistir(
 
 
 def liberar(sessao: Session, *, simulado_id: int) -> Simulado:
-    simulado = sessao.get(Simulado, simulado_id)
-    if simulado is None:
-        raise ValueError(f"simulado {simulado_id} não encontrado")
+    simulado = _obter_simulado(sessao, simulado_id)
     if simulado.status != StatusSimulado.GERADO:
-        raise ValueError("apenas simulados GERADOS podem ser liberados")
+        raise RegraNegocio("apenas simulados GERADOS podem ser liberados")
     simulado.status = StatusSimulado.LIBERADO
     sessao.commit()
     sessao.refresh(simulado)
@@ -93,9 +98,7 @@ def liberar(sessao: Session, *, simulado_id: int) -> Simulado:
 def montar_questoes(
     sessao: Session, *, simulado_id: int, incluir_gabarito: bool = False
 ) -> list[dict]:
-    simulado = sessao.get(Simulado, simulado_id)
-    if simulado is None:
-        raise ValueError(f"simulado {simulado_id} não encontrado")
+    simulado = _obter_simulado(sessao, simulado_id)
 
     questoes: list[dict] = []
     for sq in simulado.questoes:
@@ -107,13 +110,23 @@ def montar_questoes(
         for letra, alt_id in zip(LETRAS, sq.alternativas_ordem):
             alt = alt_por_id.get(alt_id)
             if alt is None:
-                continue
+                raise RegraNegocio(
+                    f"a ordem de alternativas do simulado referencia uma "
+                    f"alternativa inexistente (questão {questao.id})",
+                    codigo="simulado_inconsistente",
+                )
             item = {"letra": letra, "texto": alt.texto, "alternativa_id": alt.id}
             if incluir_gabarito:
                 item["correta"] = alt.correta
             if alt.correta:
                 gabarito = letra
             alternativas.append(item)
+
+        if incluir_gabarito and gabarito is None:
+            raise RegraNegocio(
+                f"questão {questao.id} do simulado está sem gabarito válido",
+                codigo="simulado_inconsistente",
+            )
 
         q = {
             "ordem": sq.ordem_questao,
@@ -138,11 +151,9 @@ def registrar_resposta(
     questao_id: int,
     alternativa_id: int,
 ) -> Resposta:
-    simulado = sessao.get(Simulado, simulado_id)
-    if simulado is None:
-        raise ValueError(f"simulado {simulado_id} não encontrado")
+    simulado = _obter_simulado(sessao, simulado_id)
     if simulado.status != StatusSimulado.LIBERADO:
-        raise ValueError("o simulado não está liberado para respostas")
+        raise RegraNegocio("o simulado não está liberado para respostas")
 
     pertence = sessao.scalar(
         select(SimuladoQuestao).where(
@@ -151,11 +162,11 @@ def registrar_resposta(
         )
     )
     if pertence is None:
-        raise ValueError("a questão não pertence a este simulado")
+        raise DadosInvalidos("a questão não pertence a este simulado")
 
     alternativa = sessao.get(Alternativa, alternativa_id)
     if alternativa is None or alternativa.questao_id != questao_id:
-        raise ValueError("alternativa inválida para a questão")
+        raise DadosInvalidos("alternativa inválida para a questão")
 
     resposta = sessao.scalar(
         select(Resposta).where(
@@ -183,9 +194,11 @@ def registrar_resposta(
 
 
 def finalizar_e_corrigir(sessao: Session, *, simulado_id: int) -> dict:
-    simulado = sessao.get(Simulado, simulado_id)
-    if simulado is None:
-        raise ValueError(f"simulado {simulado_id} não encontrado")
+    simulado = _obter_simulado(sessao, simulado_id)
+    if simulado.status != StatusSimulado.LIBERADO:
+        raise RegraNegocio(
+            "só é possível finalizar um simulado que esteja LIBERADO"
+        )
 
     total_questoes = len(simulado.questoes)
     respostas = sessao.scalars(
@@ -225,22 +238,20 @@ def finalizar_e_corrigir(sessao: Session, *, simulado_id: int) -> dict:
 
 def _exigir_editavel(simulado: Simulado) -> None:
     if simulado.status != StatusSimulado.GERADO:
-        raise ValueError(
+        raise RegraNegocio(
             "só é possível editar o simulado no status 'gerado' (antes de liberar)"
         )
 
 
 def remover_questao(sessao: Session, *, simulado_id: int, questao_id: int) -> Simulado:
-    simulado = sessao.get(Simulado, simulado_id)
-    if simulado is None:
-        raise ValueError(f"simulado {simulado_id} não encontrado")
+    simulado = _obter_simulado(sessao, simulado_id)
     _exigir_editavel(simulado)
 
     alvo = next((sq for sq in simulado.questoes if sq.questao_id == questao_id), None)
     if alvo is None:
-        raise ValueError("questão não está neste simulado")
+        raise NaoEncontrado("questão não está neste simulado")
     if len(simulado.questoes) <= 1:
-        raise ValueError("o simulado precisa manter ao menos 1 questão")
+        raise RegraNegocio("o simulado precisa manter ao menos 1 questão")
 
     simulado.questoes.remove(alvo)
     sessao.flush()
@@ -256,29 +267,37 @@ def remover_questao(sessao: Session, *, simulado_id: int, questao_id: int) -> Si
 def trocar_questao(
     sessao: Session, *, simulado_id: int, questao_id: int, seed: int | None = None
 ) -> Simulado:
-    simulado = sessao.get(Simulado, simulado_id)
-    if simulado is None:
-        raise ValueError(f"simulado {simulado_id} não encontrado")
+    simulado = _obter_simulado(sessao, simulado_id)
     _exigir_editavel(simulado)
 
     alvo = next((sq for sq in simulado.questoes if sq.questao_id == questao_id), None)
     if alvo is None:
-        raise ValueError("questão não está neste simulado")
+        raise NaoEncontrado("questão não está neste simulado")
+
+    nivel_alvo = alvo.questao.nivel.nome
 
     p = simulado.parametros_json or {}
     candidatas = questao_repository.filtrar_questoes(
         sessao,
         serie=p.get("serie"),
         materia=p.get("materia"),
+        materias=p.get("materias"),
         conteudos=p.get("conteudos"),
+        adaptacoes=p.get("adaptacoes"),
     )
     presentes = {sq.questao_id for sq in simulado.questoes}
     disponiveis = [q for q in candidatas if q.id not in presentes]
     if not disponiveis:
-        raise ValueError("não há outra questão disponível para troca com esses filtros")
+        raise RegraNegocio(
+            "não há outra questão disponível para troca com esses filtros"
+        )
+
+    # Preferimos manter o mesmo nível de dificuldade da questão trocada.
+    mesmo_nivel = [q for q in disponiveis if q.nivel.nome == nivel_alvo]
+    pool = mesmo_nivel or disponiveis
 
     rng = random.Random(seed)
-    nova = rng.choice(disponiveis)
+    nova = rng.choice(pool)
     alternativas = list(nova.alternativas)
     rng.shuffle(alternativas)
 

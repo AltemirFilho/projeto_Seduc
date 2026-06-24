@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_session
+from app.api.deps import get_session, require_gestor
 from app.models import Questao
 from app.repositories import questao_repository
 from app.services import questao_service
@@ -46,41 +46,58 @@ def _serializar(questao: Questao) -> dict:
     }
 
 
-@router.get("", summary="Listar e filtrar questões do banco")
+@router.get(
+    "",
+    summary="Listar e filtrar questões do banco (paginado)",
+    dependencies=[Depends(require_gestor)],
+)
 def listar_questoes(
     serie: str | None = Query(None, description="Ex.: '9º ano'"),
     materia: str | None = Query(None, description="Ex.: 'Matemática'"),
     conteudo: str | None = Query(None, description="Ex.: 'Funções'"),
     nivel: str | None = Query(None, description="Fácil, Médio ou Difícil"),
-    limite: int = Query(20, ge=1, le=200),
+    pagina: int = Query(1, ge=1),
+    por_pagina: int = Query(20, ge=1, le=100),
     sessao: Session = Depends(get_session),
-) -> list[dict]:
-    questoes = questao_repository.filtrar_questoes(
+) -> dict:
+    itens, total = questao_repository.buscar_paginado(
         sessao,
         serie=serie,
         materia=materia,
-        conteudos=[conteudo] if conteudo else None,
+        conteudo=conteudo,
         nivel=nivel,
-        limite=limite,
+        pagina=pagina,
+        por_pagina=por_pagina,
     )
-    return [_serializar(q) for q in questoes]
+    total_paginas = max(1, (total + por_pagina - 1) // por_pagina)
+    return {
+        "dados": [_serializar(q) for q in itens],
+        "meta": {
+            "pagina": pagina,
+            "porPagina": por_pagina,
+            "total": total,
+            "totalPaginas": total_paginas,
+        },
+    }
 
 
-@router.post("", summary="Cadastrar uma questão")
+@router.post(
+    "",
+    status_code=status.HTTP_201_CREATED,
+    summary="Cadastrar uma questão",
+    dependencies=[Depends(require_gestor)],
+)
 def cadastrar_questao(
     req: CadastrarQuestaoRequest, sessao: Session = Depends(get_session)
 ) -> dict:
-    try:
-        questao = questao_service.cadastrar_questao(
-            sessao,
-            enunciado=req.enunciado,
-            serie=req.serie,
-            materia=req.materia,
-            conteudo=req.conteudo,
-            nivel=req.nivel,
-            alternativas=[a.model_dump() for a in req.alternativas],
-            adaptacoes=req.adaptacoes,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    questao = questao_service.cadastrar_questao(
+        sessao,
+        enunciado=req.enunciado,
+        serie=req.serie,
+        materia=req.materia,
+        conteudo=req.conteudo,
+        nivel=req.nivel,
+        alternativas=[a.model_dump() for a in req.alternativas],
+        adaptacoes=req.adaptacoes,
+    )
     return _serializar(questao)

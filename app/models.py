@@ -4,21 +4,27 @@ from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy import (
-    JSON,
     Boolean,
     DateTime,
     Enum as SAEnum,
     ForeignKey,
+    Index,
     Integer,
+    JSON,
     String,
     Text,
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 from app.enums import PerfilUsuario, StatusSimulado
+
+# JSON portável: TEXT no SQLite (dev), JSONB nativo no PostgreSQL (produção),
+# sem nenhuma mudança no código de quem usa.
+JSON_PORTAVEL = JSON().with_variant(JSONB, "postgresql")
 
 
 class Serie(Base):
@@ -60,6 +66,7 @@ class Conteudo(Base):
     materia_id: Mapped[int] = mapped_column(
         ForeignKey("materias.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
     )
 
     materia: Mapped["Materia"] = relationship(back_populates="conteudos")
@@ -83,17 +90,28 @@ class Nivel(Base):
 
 class Questao(Base):
     __tablename__ = "questoes"
+    __table_args__ = (
+        Index("ix_questoes_serie_materia", "serie_id", "materia_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     enunciado: Mapped[str] = mapped_column(Text, nullable=False)
     imagem_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
-    serie_id: Mapped[int] = mapped_column(ForeignKey("series.id"), nullable=False)
-    materia_id: Mapped[int] = mapped_column(ForeignKey("materias.id"), nullable=False)
-    conteudo_id: Mapped[int] = mapped_column(ForeignKey("conteudos.id"), nullable=False)
-    nivel_id: Mapped[int] = mapped_column(ForeignKey("niveis.id"), nullable=False)
+    serie_id: Mapped[int] = mapped_column(
+        ForeignKey("series.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    materia_id: Mapped[int] = mapped_column(
+        ForeignKey("materias.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    conteudo_id: Mapped[int] = mapped_column(
+        ForeignKey("conteudos.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    nivel_id: Mapped[int] = mapped_column(
+        ForeignKey("niveis.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
 
-    adaptacoes: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    adaptacoes: Mapped[list] = mapped_column(JSON_PORTAVEL, default=list, nullable=False)
 
     criada_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -126,6 +144,7 @@ class Alternativa(Base):
     questao_id: Mapped[int] = mapped_column(
         ForeignKey("questoes.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
     )
     texto: Mapped[str] = mapped_column(Text, nullable=False)
     correta: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -167,7 +186,9 @@ class Escola(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     nome: Mapped[str] = mapped_column(String(160), nullable=False)
     municipio: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
-    codigo_inep: Mapped[Optional[str]] = mapped_column(String(20), unique=True, nullable=True)
+    codigo_inep: Mapped[Optional[str]] = mapped_column(
+        String(20), unique=True, nullable=True
+    )
 
     turmas: Mapped[List["Turma"]] = relationship(
         back_populates="escola", cascade="all, delete-orphan"
@@ -181,8 +202,12 @@ class Turma(Base):
     __tablename__ = "turmas"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    escola_id: Mapped[int] = mapped_column(ForeignKey("escolas.id"), nullable=False)
-    serie_id: Mapped[int] = mapped_column(ForeignKey("series.id"), nullable=False)
+    escola_id: Mapped[int] = mapped_column(
+        ForeignKey("escolas.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    serie_id: Mapped[int] = mapped_column(
+        ForeignKey("series.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
     ano_letivo: Mapped[int] = mapped_column(Integer, nullable=False)
     nome: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
 
@@ -200,10 +225,16 @@ class Aluno(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     usuario_id: Mapped[int] = mapped_column(
-        ForeignKey("usuarios.id"), unique=True, nullable=False
+        ForeignKey("usuarios.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
     )
-    turma_id: Mapped[int] = mapped_column(ForeignKey("turmas.id"), nullable=False)
-    perfil_cognitivo: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    turma_id: Mapped[int] = mapped_column(
+        ForeignKey("turmas.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    perfil_cognitivo: Mapped[list] = mapped_column(
+        JSON_PORTAVEL, default=list, nullable=False
+    )
 
     usuario: Mapped["Usuario"] = relationship(back_populates="aluno")
     turma: Mapped["Turma"] = relationship(back_populates="alunos")
@@ -217,10 +248,16 @@ class Simulado(Base):
     __tablename__ = "simulados"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    gestor_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), nullable=False)
-    turma_id: Mapped[int] = mapped_column(ForeignKey("turmas.id"), nullable=False)
+    gestor_id: Mapped[int] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    turma_id: Mapped[int] = mapped_column(
+        ForeignKey("turmas.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
     titulo: Mapped[str] = mapped_column(String(160), nullable=False)
-    parametros_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    parametros_json: Mapped[dict] = mapped_column(
+        JSON_PORTAVEL, default=dict, nullable=False
+    )
     status: Mapped[StatusSimulado] = mapped_column(
         SAEnum(StatusSimulado), default=StatusSimulado.RASCUNHO, nullable=False
     )
@@ -249,11 +286,13 @@ class SimuladoQuestao(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     simulado_id: Mapped[int] = mapped_column(
-        ForeignKey("simulados.id", ondelete="CASCADE"), nullable=False
+        ForeignKey("simulados.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    questao_id: Mapped[int] = mapped_column(ForeignKey("questoes.id"), nullable=False)
+    questao_id: Mapped[int] = mapped_column(
+        ForeignKey("questoes.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
     ordem_questao: Mapped[int] = mapped_column(Integer, nullable=False)
-    alternativas_ordem: Mapped[list] = mapped_column(JSON, nullable=False)
+    alternativas_ordem: Mapped[list] = mapped_column(JSON_PORTAVEL, nullable=False)
 
     simulado: Mapped["Simulado"] = relationship(back_populates="questoes")
     questao: Mapped["Questao"] = relationship()
@@ -274,11 +313,17 @@ class Resposta(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    aluno_id: Mapped[int] = mapped_column(ForeignKey("alunos.id"), nullable=False)
-    simulado_id: Mapped[int] = mapped_column(ForeignKey("simulados.id"), nullable=False)
-    questao_id: Mapped[int] = mapped_column(ForeignKey("questoes.id"), nullable=False)
+    aluno_id: Mapped[int] = mapped_column(
+        ForeignKey("alunos.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    simulado_id: Mapped[int] = mapped_column(
+        ForeignKey("simulados.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    questao_id: Mapped[int] = mapped_column(
+        ForeignKey("questoes.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
     alternativa_id: Mapped[int] = mapped_column(
-        ForeignKey("alternativas.id"), nullable=False
+        ForeignKey("alternativas.id", ondelete="RESTRICT"), nullable=False
     )
     correta: Mapped[bool] = mapped_column(Boolean, nullable=False)
     respondida_em: Mapped[datetime] = mapped_column(

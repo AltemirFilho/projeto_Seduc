@@ -1,15 +1,27 @@
-from pathlib import Path
-
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+from app.config import settings
 
-DB_PATH = BASE_DIR / "seduc_questoes.db"
+_e_sqlite = settings.database_url.startswith("sqlite")
+_connect_args = {"check_same_thread": False} if _e_sqlite else {}
 
-DATABASE_URL = f"sqlite:///{DB_PATH}"
+engine = create_engine(
+    settings.database_url,
+    echo=False,
+    future=True,
+    connect_args=_connect_args,
+)
 
-engine = create_engine(DATABASE_URL, echo=False)
+
+if _e_sqlite:
+
+    @event.listens_for(engine, "connect")
+    def _ativar_integridade_referencial(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
 
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 

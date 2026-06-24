@@ -8,14 +8,15 @@ import time
 
 import jwt
 
-CHAVE_SECRETA = os.environ.get("SEDU_JWT_SECRET", "troque-esta-chave-em-producao")
+from app.config import settings
+
 ALGORITMO = "HS256"
-HORAS_VALIDADE = 8
+_ITERACOES = 100_000
 
 
 def gerar_hash_senha(senha: str) -> str:
     salt = os.urandom(16)
-    derivada = hashlib.pbkdf2_hmac("sha256", senha.encode("utf-8"), salt, 100_000)
+    derivada = hashlib.pbkdf2_hmac("sha256", senha.encode("utf-8"), salt, _ITERACOES)
     return base64.b64encode(salt + derivada).decode("ascii")
 
 
@@ -24,8 +25,10 @@ def verificar_senha(senha: str, hash_armazenado: str) -> bool:
         dados = base64.b64decode(hash_armazenado.encode("ascii"))
     except Exception:
         return False
+    if len(dados) <= 16:
+        return False
     salt, derivada = dados[:16], dados[16:]
-    nova = hashlib.pbkdf2_hmac("sha256", senha.encode("utf-8"), salt, 100_000)
+    nova = hashlib.pbkdf2_hmac("sha256", senha.encode("utf-8"), salt, _ITERACOES)
     return hmac.compare_digest(derivada, nova)
 
 
@@ -35,10 +38,10 @@ def criar_token(usuario_id: int, perfil: str) -> str:
         "sub": str(usuario_id),
         "perfil": perfil,
         "iat": agora,
-        "exp": agora + HORAS_VALIDADE * 3600,
+        "exp": agora + settings.jwt_expira_horas * 3600,
     }
-    return jwt.encode(payload, CHAVE_SECRETA, algorithm=ALGORITMO)
+    return jwt.encode(payload, settings.jwt_secret, algorithm=ALGORITMO)
 
 
 def decodificar_token(token: str) -> dict:
-    return jwt.decode(token, CHAVE_SECRETA, algorithms=[ALGORITMO])
+    return jwt.decode(token, settings.jwt_secret, algorithms=[ALGORITMO])
