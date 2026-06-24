@@ -13,10 +13,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SEGREDOS_INSEGUROS = {
     "",
     "troque-esta-chave-em-producao",
+    "cole-aqui-um-segredo-forte",
     "changeme",
     "secret",
     "secret-key",
 }
+
+TAMANHO_MINIMO_SEGREDO = 32
 
 
 class Settings(BaseSettings):
@@ -36,7 +39,7 @@ class Settings(BaseSettings):
     cors_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["http://localhost:3000", "http://127.0.0.1:3000"]
     )
-    demo_habilitado: bool = True
+    demo_habilitado: bool = False
 
     @property
     def em_producao(self) -> bool:
@@ -50,10 +53,14 @@ class Settings(BaseSettings):
         return valor
 
     def validar(self) -> "Settings":
-        inseguro = self.jwt_secret in SEGREDOS_INSEGUROS
+        inseguro = (
+            self.jwt_secret in SEGREDOS_INSEGUROS
+            or len(self.jwt_secret) < TAMANHO_MINIMO_SEGREDO
+        )
         if inseguro and self.em_producao:
             raise RuntimeError(
-                "SEDU_JWT_SECRET ausente ou inseguro em produção. Gere um forte com: "
+                "SEDU_JWT_SECRET ausente, fraco ou inseguro em produção (mínimo "
+                f"{TAMANHO_MINIMO_SEGREDO} caracteres). Gere um forte com: "
                 'python -c "import secrets; print(secrets.token_urlsafe(48))" '
                 "e defina-o no ambiente antes de subir a aplicação."
             )

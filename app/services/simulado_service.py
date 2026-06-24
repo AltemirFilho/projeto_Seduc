@@ -243,6 +243,21 @@ def _exigir_editavel(simulado: Simulado) -> None:
         )
 
 
+def _validar_questao_para_simulado(questao) -> None:
+    """Mesmas guardas que prova_service aplica ao gerar: teto de alternativas e gabarito."""
+    if len(questao.alternativas) > prova_service.MAX_ALTERNATIVAS:
+        raise RegraNegocio(
+            f"questão {questao.id} tem mais de {prova_service.MAX_ALTERNATIVAS} "
+            f"alternativas e não pode entrar no simulado",
+            codigo="questao_inconsistente",
+        )
+    if not any(a.correta for a in questao.alternativas):
+        raise RegraNegocio(
+            f"questão {questao.id} não possui alternativa correta",
+            codigo="questao_sem_gabarito",
+        )
+
+
 def remover_questao(sessao: Session, *, simulado_id: int, questao_id: int) -> Simulado:
     simulado = _obter_simulado(sessao, simulado_id)
     _exigir_editavel(simulado)
@@ -298,6 +313,7 @@ def trocar_questao(
 
     rng = random.Random(seed)
     nova = rng.choice(pool)
+    _validar_questao_para_simulado(nova)
     alternativas = list(nova.alternativas)
     rng.shuffle(alternativas)
 

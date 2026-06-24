@@ -75,6 +75,21 @@ def test_gestor_nao_responde(client, h_gestor, dados):
     assert r.status_code == 403
 
 
+def test_gestor_edita_simulado_trocar_e_remover(client, h_gestor, dados):
+    sid = _cria_e_gera(client, h_gestor, dados["turma_id"], quantidade=3)
+    prev = client.get(f"/simulados/{sid}/preview", headers=h_gestor).json()["questoes"]
+    qid = prev[0]["questao_id"]
+
+    trocado = client.post(f"/simulados/{sid}/questoes/{qid}/trocar", headers=h_gestor)
+    assert trocado.status_code == 200
+    assert len(trocado.json()["questoes"]) == 3
+
+    qid2 = trocado.json()["questoes"][0]["questao_id"]
+    removido = client.delete(f"/simulados/{sid}/questoes/{qid2}", headers=h_gestor)
+    assert removido.status_code == 200
+    assert len(removido.json()["questoes"]) == 2
+
+
 def test_aluno_ve_questoes_sem_gabarito(client, h_gestor, h_aluno, dados):
     sid = _cria_e_gera(client, h_gestor, dados["turma_id"], quantidade=3)
     client.post(f"/simulados/{sid}/liberar", headers=h_gestor, json={})

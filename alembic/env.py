@@ -2,14 +2,12 @@ import sys
 from logging.config import fileConfig
 from pathlib import Path
 
-from sqlalchemy import create_engine
-
 from alembic import context
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.config import settings  # noqa: E402
-from app.database import Base  # noqa: E402
+from app.database import Base, engine  # noqa: E402  reusa o engine da app (PRAGMA FK on)
 from app import models  # noqa: E402, F401  registra as tabelas no metadata
 
 config = context.config
@@ -33,8 +31,7 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    connectable = create_engine(settings.database_url)
-    with connectable.connect() as connection:
+    with engine.connect() as connection:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
