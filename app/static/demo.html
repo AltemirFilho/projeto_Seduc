@@ -6,14 +6,8 @@
   <title>SEDUC Simulados — Demo de Integração</title>
   <style>
     :root {
-      --azul: #0b4f8a;
-      --azul-claro: #1769aa;
-      --verde: #1f8a4c;
-      --cinza: #f4f6f8;
-      --borda: #d8dee4;
-      --texto: #1c2733;
-      --suave: #5b6b7b;
-      --perigo: #b3261e;
+      --azul: #0b4f8a; --azul-claro: #1769aa; --verde: #1f8a4c;
+      --cinza: #f4f6f8; --borda: #d8dee4; --texto: #1c2733; --suave: #5b6b7b; --perigo: #b3261e;
     }
     * { box-sizing: border-box; }
     body { margin: 0; font-family: "Segoe UI", system-ui, -apple-system, sans-serif; background: var(--cinza); color: var(--texto); line-height: 1.5; }
@@ -21,6 +15,8 @@
     header h1 { margin: 0 0 4px; font-size: 1.5rem; }
     header p { margin: 0; opacity: 0.9; font-size: 0.95rem; }
     .badge-api { display: inline-block; margin-top: 10px; font-size: 0.8rem; background: rgba(255,255,255,0.18); padding: 4px 10px; border-radius: 20px; }
+    #auth-status { margin-top: 10px; font-size: 0.82rem; }
+    #auth-status .pill { display:inline-block; background: rgba(255,255,255,0.16); padding: 3px 10px; border-radius: 14px; margin-right: 6px; }
     main { max-width: 1080px; margin: 0 auto; padding: 24px; display: grid; gap: 24px; grid-template-columns: 1fr; }
     @media (min-width: 900px) { main { grid-template-columns: 1fr 1fr; } .full { grid-column: 1 / -1; } }
     .card { background: #fff; border: 1px solid var(--borda); border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
@@ -65,7 +61,8 @@
   <header>
     <h1>SEDUC Simulados — Demonstração de Integração</h1>
     <p>Sistema de Simulados Educacionais com IA · Secretaria de Educação de Sergipe</p>
-    <span class="badge-api">Esta página consome a API FastAPI ao vivo · banco de dados real</span>
+    <span class="badge-api">Esta página consome a API FastAPI ao vivo · autenticação JWT por perfil · banco real</span>
+    <div id="auth-status"></div>
   </header>
 
   <main>
@@ -73,20 +70,11 @@
       <h2>1. Gerar prova</h2>
       <p class="sub">O backend filtra o banco, equilibra por dificuldade e embaralha as alternativas.</p>
       <div class="linha">
-        <div>
-          <label>Série</label>
-          <select id="prova-serie"></select>
-        </div>
-        <div>
-          <label>Matéria</label>
-          <select id="prova-materia"></select>
-        </div>
+        <div><label>Série</label><select id="prova-serie"></select></div>
+        <div><label>Matéria</label><select id="prova-materia"></select></div>
       </div>
       <div class="linha">
-        <div>
-          <label>Quantidade de questões</label>
-          <input type="number" id="prova-qtd" value="5" min="1" max="30" />
-        </div>
+        <div><label>Quantidade de questões</label><input type="number" id="prova-qtd" value="5" min="1" max="30" /></div>
       </div>
       <label>Distribuição por dificuldade (%)</label>
       <div class="linha">
@@ -104,24 +92,12 @@
       <label>Enunciado</label>
       <textarea id="q-enunciado" placeholder="Digite o enunciado da questão..."></textarea>
       <div class="linha">
-        <div>
-          <label>Série</label>
-          <select id="q-serie"></select>
-        </div>
-        <div>
-          <label>Nível</label>
-          <select id="q-nivel"></select>
-        </div>
+        <div><label>Série</label><select id="q-serie"></select></div>
+        <div><label>Nível</label><select id="q-nivel"></select></div>
       </div>
       <div class="linha">
-        <div>
-          <label>Matéria</label>
-          <input type="text" id="q-materia" value="Matemática" />
-        </div>
-        <div>
-          <label>Conteúdo</label>
-          <input type="text" id="q-conteudo" placeholder="Ex.: Funções" />
-        </div>
+        <div><label>Matéria</label><input type="text" id="q-materia" value="Matemática" /></div>
+        <div><label>Conteúdo</label><input type="text" id="q-conteudo" placeholder="Ex.: Funções" /></div>
       </div>
       <label>Alternativas (marque a correta)</label>
       <div id="q-alternativas">
@@ -136,23 +112,17 @@
 
     <section class="card full">
       <h2>3. Banco de questões <span class="contador" id="q-contador"></span></h2>
-      <p class="sub">Lista lida diretamente do banco via GET /questoes.</p>
+      <p class="sub">Lista lida do banco via GET /questoes (restrito a gestor — expõe o gabarito).</p>
       <button id="btn-atualizar" style="margin-top:0">Atualizar lista</button>
       <div id="lista-questoes" class="lista-q"></div>
     </section>
 
     <section class="card full">
       <h2>4. Ciclo de simulado — do gestor ao aluno</h2>
-      <p class="sub">O gestor cria, edita (troca/remove questões), libera; o aluno responde e o sistema corrige.</p>
+      <p class="sub">O gestor cria, edita (troca/remove questões) e libera; o aluno responde e o sistema corrige. Cada papel age com seu próprio token.</p>
       <div class="linha">
-        <div>
-          <label>Matéria</label>
-          <select id="sim-materia"></select>
-        </div>
-        <div>
-          <label>Quantidade</label>
-          <input type="number" id="sim-qtd" value="5" min="1" max="30" />
-        </div>
+        <div><label>Matéria</label><select id="sim-materia"></select></div>
+        <div><label>Quantidade</label><input type="number" id="sim-qtd" value="5" min="1" max="30" /></div>
       </div>
       <label>Distribuição por dificuldade (%)</label>
       <div class="linha">
@@ -167,31 +137,55 @@
   </main>
 
   <script>
-    const API = "";
+    const tokens = { gestor: null, aluno: null };
+    const simState = { simuladoId: null, turmaId: null, serie: null, questoes: [] };
 
-    async function getJSON(url) {
-      const r = await fetch(API + url);
-      if (!r.ok) throw new Error("Falha em " + url);
-      return r.json();
+    function esc(s) {
+      return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => (
+        { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+      ));
     }
-    async function postJSON(url, body) {
-      const r = await fetch(API + url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
-      const dados = await r.json();
-      if (!r.ok) throw new Error(dados.detail || "Erro na requisição");
+
+    async function login(email) {
+      const r = await fetch("/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, senha: "sedu123" }),
+      });
+      if (!r.ok) return null;
+      return (await r.json()).token;
+    }
+
+    async function api(method, url, { body, perfil = "gestor" } = {}) {
+      const r = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + (tokens[perfil] || ""),
+        },
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+      let dados = null;
+      try { dados = await r.json(); } catch (e) { /* sem corpo */ }
+      if (!r.ok) {
+        const msg = (dados && (dados.mensagem || dados.detail)) || ("Erro " + r.status);
+        throw new Error(msg);
+      }
       return dados;
     }
-    async function deleteJSON(url) {
-      const r = await fetch(API + url, { method: "DELETE" });
-      const dados = await r.json();
-      if (!r.ok) throw new Error(dados.detail || "Erro na requisição");
-      return dados;
-    }
-    function opcoes(select, itens) {
-      select.innerHTML = itens.map((i) => `<option value="${i.nome}">${i.nome}</option>`).join("");
+
+    function preencher(select, itens) {
+      select.innerHTML = "";
+      itens.forEach((i) => {
+        const opt = document.createElement("option");
+        opt.value = i.nome;
+        opt.textContent = i.nome;
+        select.appendChild(opt);
+      });
     }
     function tagNivel(nivel) {
       const cls = nivel === "Fácil" ? "facil" : nivel === "Difícil" ? "dificil" : "";
-      return `<span class="tag ${cls}">${nivel}</span>`;
+      return `<span class="tag ${cls}">${esc(nivel)}</span>`;
     }
     function lerDistribuicao(prefixo) {
       const f = Number(document.getElementById(prefixo + "-facil").value) || 0;
@@ -204,21 +198,18 @@
 
     async function carregarEtiquetas() {
       const [series, materias, niveis] = await Promise.all([
-        getJSON("/etiquetas/series"),
-        getJSON("/etiquetas/materias"),
-        getJSON("/etiquetas/niveis"),
+        api("GET", "/etiquetas/series"),
+        api("GET", "/etiquetas/materias"),
+        api("GET", "/etiquetas/niveis"),
       ]);
-      opcoes(document.getElementById("prova-serie"), series);
-      opcoes(document.getElementById("q-serie"), series);
-      opcoes(document.getElementById("q-nivel"), niveis);
-      const fallback = [{ nome: "Matemática" }];
-      const lista = materias.length ? materias : fallback;
-      opcoes(document.getElementById("prova-materia"), lista);
-      opcoes(document.getElementById("sim-materia"), lista);
+      preencher(document.getElementById("prova-serie"), series);
+      preencher(document.getElementById("q-serie"), series);
+      preencher(document.getElementById("q-nivel"), niveis);
+      const lista = materias.length ? materias : [{ nome: "Matemática" }];
+      preencher(document.getElementById("prova-materia"), lista);
+      preencher(document.getElementById("sim-materia"), lista);
       const s9 = series.find((s) => s.nome.includes("9"));
-      if (s9) {
-        document.getElementById("prova-serie").value = s9.nome;
-      }
+      if (s9) document.getElementById("prova-serie").value = s9.nome;
     }
 
     document.getElementById("btn-gerar").addEventListener("click", async () => {
@@ -227,24 +218,26 @@
       btn.disabled = true; btn.textContent = "Gerando...";
       alvo.innerHTML = "";
       try {
-        const prova = await postJSON("/provas/gerar", {
-          serie: document.getElementById("prova-serie").value,
-          materia: document.getElementById("prova-materia").value,
-          quantidade: Number(document.getElementById("prova-qtd").value),
-          distribuicao: lerDistribuicao("prova"),
+        const prova = await api("POST", "/provas/gerar", {
+          body: {
+            serie: document.getElementById("prova-serie").value,
+            materia: document.getElementById("prova-materia").value,
+            quantidade: Number(document.getElementById("prova-qtd").value),
+            distribuicao: lerDistribuicao("prova"),
+          },
         });
-        let html = `<div class="aviso ok">Prova gerada: ${prova.total} questões · distribuição real ${JSON.stringify(prova.distribuicao_real)}</div>`;
+        let html = `<div class="aviso ok">Prova gerada: ${prova.total} questões · distribuição real ${esc(JSON.stringify(prova.distribuicao_real))}</div>`;
         prova.questoes.forEach((q) => {
-          html += `<div class="questao"><div class="meta">Q${q.ordem} · ${q.conteudo} ${tagNivel(q.nivel)}</div>`;
-          html += `<div class="enun">${q.enunciado}</div><ul>`;
-          q.alternativas.forEach((a) => { html += `<li>${a.letra}) ${a.texto}</li>`; });
+          html += `<div class="questao"><div class="meta">Q${q.ordem} · ${esc(q.conteudo)} ${tagNivel(q.nivel)}</div>`;
+          html += `<div class="enun">${esc(q.enunciado)}</div><ul>`;
+          q.alternativas.forEach((a) => { html += `<li>${a.letra}) ${esc(a.texto)}</li>`; });
           html += `</ul></div>`;
         });
         const gab = Object.entries(prova.gabarito).map(([o, l]) => `${o}:${l}`).join("  ");
-        html += `<div class="gabarito"><strong>Gabarito:</strong> ${gab}</div>`;
+        html += `<div class="gabarito"><strong>Gabarito:</strong> ${esc(gab)}</div>`;
         alvo.innerHTML = html;
       } catch (e) {
-        alvo.innerHTML = `<div class="aviso erro">${e.message}</div>`;
+        alvo.innerHTML = `<div class="aviso erro">${esc(e.message)}</div>`;
       } finally {
         btn.disabled = false; btn.textContent = "Gerar prova";
       }
@@ -257,66 +250,68 @@
       const alternativas = [];
       inputs.forEach((inp, i) => { if (inp.value.trim()) alternativas.push({ texto: inp.value.trim(), correta: i === corretaIdx }); });
       try {
-        const nova = await postJSON("/questoes", {
-          enunciado: document.getElementById("q-enunciado").value,
-          serie: document.getElementById("q-serie").value,
-          materia: document.getElementById("q-materia").value,
-          conteudo: document.getElementById("q-conteudo").value,
-          nivel: document.getElementById("q-nivel").value,
-          alternativas,
+        const nova = await api("POST", "/questoes", {
+          body: {
+            enunciado: document.getElementById("q-enunciado").value,
+            serie: document.getElementById("q-serie").value,
+            materia: document.getElementById("q-materia").value,
+            conteudo: document.getElementById("q-conteudo").value,
+            nivel: document.getElementById("q-nivel").value,
+            alternativas,
+          },
         });
-        aviso.innerHTML = `<div class="aviso ok">Questão cadastrada com id ${nova.id}.</div>`;
+        aviso.innerHTML = `<div class="aviso ok">Questão cadastrada com id ${esc(nova.id)}.</div>`;
         document.getElementById("q-enunciado").value = "";
         inputs.forEach((i) => (i.value = ""));
         carregarQuestoes();
         carregarEtiquetas();
       } catch (e) {
-        aviso.innerHTML = `<div class="aviso erro">${e.message}</div>`;
+        aviso.innerHTML = `<div class="aviso erro">${esc(e.message)}</div>`;
       }
     });
 
     async function carregarQuestoes() {
       const alvo = document.getElementById("lista-questoes");
       try {
-        const questoes = await getJSON("/questoes?limite=200");
-        document.getElementById("q-contador").textContent = `(${questoes.length})`;
-        alvo.innerHTML = questoes.map((q) => `<div class="item-q">${tagNivel(q.nivel)} <strong>${q.materia}</strong> · ${q.conteudo} — ${q.enunciado}</div>`).join("") || '<div class="item-q">Nenhuma questão ainda.</div>';
+        const resp = await api("GET", "/questoes?por_pagina=100");
+        const questoes = resp.dados || [];
+        document.getElementById("q-contador").textContent = `(${resp.meta ? resp.meta.total : questoes.length})`;
+        alvo.innerHTML = questoes.map((q) =>
+          `<div class="item-q">${tagNivel(q.nivel)} <strong>${esc(q.materia)}</strong> · ${esc(q.conteudo)} — ${esc(q.enunciado)}</div>`
+        ).join("") || '<div class="item-q">Nenhuma questão ainda.</div>';
       } catch (e) {
-        alvo.innerHTML = `<div class="aviso erro">${e.message}</div>`;
+        alvo.innerHTML = `<div class="aviso erro">${esc(e.message)}</div>`;
       }
     }
     document.getElementById("btn-atualizar").addEventListener("click", carregarQuestoes);
-
-    const simState = { ids: null, simuladoId: null, questoes: [] };
-
-    async function prepararDemo() {
-      if (!simState.ids) simState.ids = await postJSON("/demo/preparar", {});
-      return simState.ids;
-    }
 
     document.getElementById("btn-sim-criar").addEventListener("click", async () => {
       const status = document.getElementById("sim-status");
       const area = document.getElementById("sim-area");
       area.innerHTML = "";
-      status.innerHTML = '<div class="aviso ok">Preparando estrutura (escola, turma, gestor e aluno)...</div>';
+      status.innerHTML = '<div class="aviso ok">Criando simulado como gestor...</div>';
       try {
-        const ids = await prepararDemo();
-        const criado = await postJSON("/simulados", {
-          gestor_id: ids.gestor_id,
-          turma_id: ids.turma_id,
-          titulo: "Simulado Demo — " + ids.serie,
-          serie: ids.serie,
-          materia: document.getElementById("sim-materia").value,
-          quantidade: Number(document.getElementById("sim-qtd").value),
-          distribuicao: lerDistribuicao("sim"),
+        const turmas = await api("GET", "/turmas");
+        if (!turmas.length) throw new Error("Nenhuma turma cadastrada. Rode scripts/seed_demo.py.");
+        simState.turmaId = turmas[0].id;
+        simState.serie = turmas[0].serie;
+        const criado = await api("POST", "/simulados", {
+          body: {
+            turma_id: simState.turmaId,
+            titulo: "Simulado Demo — " + simState.serie,
+            serie: simState.serie,
+            materia: document.getElementById("sim-materia").value,
+            quantidade: Number(document.getElementById("sim-qtd").value),
+            distribuicao: lerDistribuicao("sim"),
+          },
         });
-        const gerado = await postJSON("/simulados/" + criado.id + "/gerar", {});
+        const gerado = await api("POST", "/simulados/" + criado.id + "/gerar", { body: {} });
         simState.simuladoId = gerado.id;
-        status.innerHTML = `<div class="aviso ok">Simulado #${gerado.id} gerado · status <strong>${gerado.status}</strong> · ${gerado.total_questoes} questões · turma ${ids.turma} (${ids.serie})</div>`;
-        const prev = await getJSON("/simulados/" + gerado.id + "/preview");
+        status.innerHTML = `<div class="aviso ok">Simulado #${gerado.id} gerado · status <strong>${esc(gerado.status)}</strong> · ${gerado.total_questoes} questões · turma ${esc(turmas[0].nome)} (${esc(simState.serie)})</div>`;
+        const prev = await api("GET", "/simulados/" + gerado.id + "/preview");
         renderPreviewGestor(prev.questoes);
       } catch (e) {
-        status.innerHTML = `<div class="aviso erro">${e.message}</div>`;
+        status.innerHTML = `<div class="aviso erro">${esc(e.message)}</div>`;
       }
     });
 
@@ -324,9 +319,9 @@
       const area = document.getElementById("sim-area");
       let html = '<h3 style="margin-top:18px; color:var(--azul);">Prévia do gestor — edite antes de liberar</h3>';
       questoes.forEach((q) => {
-        html += `<div class="questao"><div class="meta">Q${q.ordem} · ${q.conteudo} ${tagNivel(q.nivel)} <button class="mini" onclick="trocarQuestao(${q.questao_id})">trocar</button> <button class="mini perigo" onclick="removerQuestao(${q.questao_id})">remover</button></div>`;
-        html += `<div class="enun">${q.enunciado}</div><ul>`;
-        q.alternativas.forEach((a) => { html += `<li class="${a.correta ? "correta" : ""}">${a.letra}) ${a.texto}</li>`; });
+        html += `<div class="questao"><div class="meta">Q${q.ordem} · ${esc(q.conteudo)} ${tagNivel(q.nivel)} <button class="mini" onclick="trocarQuestao(${q.questao_id})">trocar</button> <button class="mini perigo" onclick="removerQuestao(${q.questao_id})">remover</button></div>`;
+        html += `<div class="enun">${esc(q.enunciado)}</div><ul>`;
+        q.alternativas.forEach((a) => { html += `<li class="${a.correta ? "correta" : ""}">${a.letra}) ${esc(a.texto)}</li>`; });
         html += `</ul></div>`;
       });
       html += '<button class="verde" id="btn-sim-liberar">2 · Liberar para os alunos</button>';
@@ -336,26 +331,28 @@
 
     async function trocarQuestao(questaoId) {
       try {
-        const dados = await postJSON(`/simulados/${simState.simuladoId}/questoes/${questaoId}/trocar`, {});
+        const dados = await api("POST", `/simulados/${simState.simuladoId}/questoes/${questaoId}/trocar`, { body: {} });
         renderPreviewGestor(dados.questoes);
       } catch (e) { alert(e.message); }
     }
     async function removerQuestao(questaoId) {
       try {
-        const dados = await deleteJSON(`/simulados/${simState.simuladoId}/questoes/${questaoId}`);
+        const dados = await api("DELETE", `/simulados/${simState.simuladoId}/questoes/${questaoId}`);
         renderPreviewGestor(dados.questoes);
       } catch (e) { alert(e.message); }
     }
+    window.trocarQuestao = trocarQuestao;
+    window.removerQuestao = removerQuestao;
 
     async function liberarSim() {
       const status = document.getElementById("sim-status");
       try {
-        const lib = await postJSON("/simulados/" + simState.simuladoId + "/liberar", {});
-        status.innerHTML = `<div class="aviso ok">Simulado #${lib.id} · status <strong>${lib.status}</strong> — o aluno já pode responder abaixo</div>`;
-        const dados = await getJSON("/simulados/" + simState.simuladoId + "/questoes");
+        const lib = await api("POST", "/simulados/" + simState.simuladoId + "/liberar", { body: {} });
+        status.innerHTML = `<div class="aviso ok">Simulado #${lib.id} · status <strong>${esc(lib.status)}</strong> — o aluno já pode responder abaixo</div>`;
+        const dados = await api("GET", "/simulados/" + simState.simuladoId + "/questoes", { perfil: "aluno" });
         renderQuestoesAluno(dados.questoes);
       } catch (e) {
-        status.innerHTML = `<div class="aviso erro">${e.message}</div>`;
+        status.innerHTML = `<div class="aviso erro">${esc(e.message)}</div>`;
       }
     }
 
@@ -364,9 +361,9 @@
       simState.questoes = questoes;
       let html = '<h3 style="margin-top:18px; color:var(--azul);">Visão do aluno — responda as questões</h3>';
       questoes.forEach((q) => {
-        html += `<div class="questao"><div class="meta">Q${q.ordem} · ${q.conteudo} ${tagNivel(q.nivel)}</div>`;
-        html += `<div class="enun">${q.enunciado}</div>`;
-        q.alternativas.forEach((a) => { html += `<label class="alt-linha" style="cursor:pointer;"><input type="radio" name="simq${q.questao_id}" value="${a.alternativa_id}" /> <span style="white-space:normal">${a.letra}) ${a.texto}</span></label>`; });
+        html += `<div class="questao"><div class="meta">Q${q.ordem} · ${esc(q.conteudo)} ${tagNivel(q.nivel)}</div>`;
+        html += `<div class="enun">${esc(q.enunciado)}</div>`;
+        q.alternativas.forEach((a) => { html += `<label class="alt-linha" style="cursor:pointer;"><input type="radio" name="simq${q.questao_id}" value="${a.alternativa_id}" /> <span style="white-space:normal">${a.letra}) ${esc(a.texto)}</span></label>`; });
         html += `</div>`;
       });
       html += '<button class="verde" id="btn-sim-finalizar">3 · Finalizar e corrigir</button>';
@@ -380,25 +377,40 @@
         for (const q of simState.questoes) {
           const escolhida = document.querySelector(`input[name="simq${q.questao_id}"]:checked`);
           if (!escolhida) continue;
-          await postJSON("/respostas", { aluno_id: simState.ids.aluno_id, simulado_id: simState.simuladoId, questao_id: q.questao_id, alternativa_id: Number(escolhida.value) });
+          await api("POST", "/respostas", {
+            perfil: "aluno",
+            body: { simulado_id: simState.simuladoId, questao_id: q.questao_id, alternativa_id: Number(escolhida.value) },
+          });
         }
-        const resultado = await postJSON("/simulados/" + simState.simuladoId + "/finalizar", {});
+        const resultado = await api("POST", "/simulados/" + simState.simuladoId + "/finalizar", { body: {} });
         let html = '<div class="gabarito" style="background:#e6f5ec; font-size:1rem;">';
-        if (resultado.resultados.length === 0) {
+        if (!resultado.resultados.length) {
           html += "Nenhuma resposta registrada — selecione alternativas antes de finalizar.";
         } else {
           resultado.resultados.forEach((r) => { html += `✅ <strong>Nota ${r.nota}</strong> — ${r.acertos}/${r.total_questoes} acertos (${r.respondidas} respondidas)`; });
         }
-        html += '</div>';
+        html += "</div>";
         area.insertAdjacentHTML("beforeend", html);
       } catch (e) {
-        area.insertAdjacentHTML("beforeend", `<div class="aviso erro">${e.message}</div>`);
+        area.insertAdjacentHTML("beforeend", `<div class="aviso erro">${esc(e.message)}</div>`);
       }
     }
 
     (async () => {
-      await carregarEtiquetas();
-      await carregarQuestoes();
+      const status = document.getElementById("auth-status");
+      tokens.gestor = await login("gestor@sedu.se.gov.br");
+      tokens.aluno = await login("aluno@sedu.se.gov.br");
+      if (!tokens.gestor || !tokens.aluno) {
+        status.innerHTML = '<span class="pill">⚠ Usuários demo não encontrados — rode <code>python scripts/seed_demo.py</code></span>';
+        return;
+      }
+      status.innerHTML = '<span class="pill">🔑 gestor@sedu.se.gov.br autenticado</span><span class="pill">🎓 aluno@sedu.se.gov.br autenticado</span>';
+      try {
+        await carregarEtiquetas();
+        await carregarQuestoes();
+      } catch (e) {
+        status.innerHTML += `<span class="pill">erro: ${esc(e.message)}</span>`;
+      }
     })();
   </script>
 </body>
