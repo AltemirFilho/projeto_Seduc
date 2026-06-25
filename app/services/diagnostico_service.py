@@ -127,11 +127,19 @@ def _fallback(agregados: dict) -> dict:
     }
 
 
+def _lista_de_strings(valor) -> list[str]:
+    """Coage a resposta da IA para lista de strings (não confiamos cegamente no shape,
+    mesmo com structured outputs); descarta tipos inesperados em vez de persistir lixo."""
+    if not isinstance(valor, list):
+        return []
+    return [v for v in valor if isinstance(v, str)]
+
+
 def _aplicar(diagnostico: DiagnosticoTurma, resultado: dict, modelo_versao: str) -> None:
     diagnostico.resumo = resultado["resumo"]
     diagnostico.pontos_fracos = resultado["pontos_fracos"]
     diagnostico.recomendacoes = resultado["recomendacoes"]
-    diagnostico.modelo_versao = modelo_versao
+    diagnostico.modelo_versao = modelo_versao[:40]  # cabe na coluna String(40)
     # Explícito: faz o timestamp avançar mesmo num resultado idêntico (o onupdate não
     # dispara quando nada muda) — mesma lição da predição de risco.
     diagnostico.gerado_em = func.now()
@@ -167,8 +175,8 @@ def gerar_diagnostico(sessao: Session, *, simulado_id: int) -> DiagnosticoTurma:
                 raise claude.IAIndisponivel("resumo vazio")
             resultado = {
                 "resumo": resumo,
-                "pontos_fracos": ia.get("pontos_fracos") or [],
-                "recomendacoes": ia.get("recomendacoes") or [],
+                "pontos_fracos": _lista_de_strings(ia.get("pontos_fracos")),
+                "recomendacoes": _lista_de_strings(ia.get("recomendacoes")),
             }
             modelo_versao = settings.claude_modelo
         except claude.IAIndisponivel as exc:
@@ -195,6 +203,9 @@ def gerar_diagnostico(sessao: Session, *, simulado_id: int) -> DiagnosticoTurma:
         diagnostico = sessao.scalar(
             select(DiagnosticoTurma).where(DiagnosticoTurma.simulado_id == simulado_id)
         )
+        if diagnostico is None:  # linha sumiu entre o conflito e o re-SELECT: recria
+            diagnostico = DiagnosticoTurma(simulado_id=simulado_id)
+            sessao.add(diagnostico)
         _aplicar(diagnostico, resultado, modelo_versao)
         sessao.commit()
 

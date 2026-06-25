@@ -105,3 +105,22 @@ def test_diagnostico_exige_gestor(client, h_gestor, h_aluno, dados):
 def test_diagnostico_simulado_inexistente(client, h_gestor):
     r = client.get("/ia/diagnostico/99999", headers=h_gestor)
     assert r.status_code == 404
+
+
+def test_diagnostico_ia_listas_malformadas_viram_vazias(
+    client, h_gestor, h_aluno, dados, monkeypatch
+):
+    # Se a IA devolver tipo errado nas listas, o serviço coage e não persiste lixo.
+    monkeypatch.setattr(claude_mod, "disponivel", lambda: True)
+    monkeypatch.setattr(
+        claude_mod,
+        "completar_json",
+        lambda **kwargs: {"resumo": "ok", "pontos_fracos": "Frações", "recomendacoes": None},
+    )
+    sid = _simulado_finalizado(client, h_gestor, h_aluno, dados["turma_id"], acertar=True)
+    r = client.get(f"/ia/diagnostico/{sid}", headers=h_gestor)
+    assert r.status_code == 200, r.text
+    corpo = r.json()
+    assert corpo["resumo"] == "ok"
+    assert corpo["pontos_fracos"] == []  # string -> coagida para lista vazia
+    assert corpo["recomendacoes"] == []
