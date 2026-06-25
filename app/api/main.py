@@ -5,6 +5,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
+from sqlalchemy.exc import IntegrityError
 
 from app.api.routers import (
     auth,
@@ -55,6 +56,19 @@ async def _tratar_validacao(request: Request, exc: RequestValidationError) -> JS
             "codigo": "dados_invalidos",
             "mensagem": "Dados da requisição inválidos.",
             "detalhes": jsonable_encoder(exc.errors()),
+        },
+    )
+
+
+@app.exception_handler(IntegrityError)
+async def _tratar_integridade(request: Request, exc: IntegrityError) -> JSONResponse:
+    # Violação de restrição do banco (ex.: unicidade) que escapou da regra de negócio:
+    # devolve 409 em vez de vazar um 500 com o detalhe interno do SQL.
+    return JSONResponse(
+        status_code=409,
+        content={
+            "codigo": "conflito_integridade",
+            "mensagem": "A operação conflita com um registro existente.",
         },
     )
 

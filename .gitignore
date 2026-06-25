@@ -23,6 +23,10 @@ __pycache__/
 # Alembic: versões ficam versionadas; cache local não
 # (nenhum padrão necessário aqui por enquanto)
 
+# Notas locais (auditoria de segurança detalhada etc.) — nunca versionar detalhe
+# explorável em repositório público.
+*.local.md
+
 # Sistema
 .DS_Store
 Thumbs.db

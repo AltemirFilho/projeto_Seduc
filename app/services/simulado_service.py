@@ -5,10 +5,10 @@ import random
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.enums import StatusSimulado
-from app.exceptions import DadosInvalidos, NaoEncontrado, RegraNegocio
-from app.models import Alternativa, Resposta, Simulado, SimuladoQuestao
-from app.repositories import questao_repository
+from app.enums import PerfilUsuario, StatusSimulado
+from app.exceptions import DadosInvalidos, NaoEncontrado, PermissaoNegada, RegraNegocio
+from app.models import Aluno, Alternativa, Resposta, Simulado, SimuladoQuestao, Usuario
+from app.repositories import questao_repository, usuario_repository
 from app.services import ia_curadoria_service, prova_service
 
 LETRAS = "ABCDE"
@@ -19,6 +19,20 @@ def _obter_simulado(sessao: Session, simulado_id: int) -> Simulado:
     if simulado is None:
         raise NaoEncontrado(f"simulado {simulado_id} não encontrado")
     return simulado
+
+
+def exigir_dono(simulado: Simulado, solicitante: Usuario) -> None:
+    """Só o gestor que criou o simulado (ou um admin) pode operá-lo. A autorização por
+    PERFIL (require_gestor) já roda no router; aqui garantimos a POSSE do recurso, para
+    um gestor não mexer no simulado de outro."""
+    if solicitante.perfil == PerfilUsuario.ADMIN:
+        return
+    if simulado.gestor_id == solicitante.id:
+        return
+    raise PermissaoNegada(
+        "você não é o gestor responsável por este simulado",
+        codigo="nao_e_dono",
+    )
 
 
 def criar_simulado(
@@ -43,9 +57,14 @@ def criar_simulado(
 
 
 def gerar_e_persistir(
-    sessao: Session, *, simulado_id: int, seed: int | None = None
+    sessao: Session,
+    *,
+    simulado_id: int,
+    solicitante: Usuario,
+    seed: int | None = None,
 ) -> Simulado:
     simulado = _obter_simulado(sessao, simulado_id)
+    exigir_dono(simulado, solicitante)
     if simulado.status not in (StatusSimulado.RASCUNHO, StatusSimulado.GERADO):
         raise RegraNegocio(
             f"simulado não pode ser gerado no status '{simulado.status.value}'"
@@ -104,8 +123,9 @@ def gerar_e_persistir(
     return simulado
 
 
-def liberar(sessao: Session, *, simulado_id: int) -> Simulado:
+def liberar(sessao: Session, *, simulado_id: int, solicitante: Usuario) -> Simulado:
     simulado = _obter_simulado(sessao, simulado_id)
+    exigir_dono(simulado, solicitante)
     if simulado.status != StatusSimulado.GERADO:
         raise RegraNegocio("apenas simulados GERADOS podem ser liberados")
     simulado.status = StatusSimulado.LIBERADO
@@ -162,6 +182,48 @@ def montar_questoes(
     return questoes
 
 
+def montar_questoes_preview(
+    sessao: Session, *, simulado_id: int, solicitante: Usuario
+) -> list[dict]:
+    """Prévia COM gabarito — restrita ao gestor dono (ou admin)."""
+    simulado = _obter_simulado(sessao, simulado_id)
+    exigir_dono(simulado, solicitante)
+    return montar_questoes(sessao, simulado_id=simulado_id, incluir_gabarito=True)
+
+
+def montar_questoes_do_aluno(
+    sessao: Session, *, simulado_id: int, solicitante: Usuario
+) -> list[dict]:
+    """Questões SEM gabarito (a visão de quem responde).
+
+    Isolamento: um aluno só enxerga simulado LIBERADO da PRÓPRIA turma. O gestor dono e o
+    admin podem inspecionar essa visão (para conferência). Qualquer outro perfil é barrado.
+    """
+    simulado = _obter_simulado(sessao, simulado_id)
+    aluno = usuario_repository.aluno_do_usuario(sessao, solicitante.id)
+    if aluno is not None:
+        if simulado.status != StatusSimulado.LIBERADO:
+            raise PermissaoNegada(
+                "o simulado ainda não foi liberado", codigo="simulado_nao_liberado"
+            )
+        if aluno.turma_id != simulado.turma_id:
+            raise PermissaoNegada(
+                "este simulado não pertence à sua turma", codigo="fora_da_turma"
+            )
+    elif solicitante.perfil == PerfilUsuario.ADMIN:
+        pass
+    elif (
+        solicitante.perfil == PerfilUsuario.GESTOR
+        and simulado.gestor_id == solicitante.id
+    ):
+        pass
+    else:
+        raise PermissaoNegada(
+            "você não tem acesso a este simulado", codigo="sem_acesso"
+        )
+    return montar_questoes(sessao, simulado_id=simulado_id, incluir_gabarito=False)
+
+
 def registrar_resposta(
     sessao: Session,
     *,
@@ -173,6 +235,14 @@ def registrar_resposta(
     simulado = _obter_simulado(sessao, simulado_id)
     if simulado.status != StatusSimulado.LIBERADO:
         raise RegraNegocio("o simulado não está liberado para respostas")
+
+    aluno = sessao.get(Aluno, aluno_id)
+    if aluno is None:
+        raise NaoEncontrado(f"aluno {aluno_id} não encontrado")
+    if aluno.turma_id != simulado.turma_id:
+        raise PermissaoNegada(
+            "você não pertence à turma deste simulado", codigo="fora_da_turma"
+        )
 
     pertence = sessao.scalar(
         select(SimuladoQuestao).where(
@@ -212,8 +282,11 @@ def registrar_resposta(
     return resposta
 
 
-def finalizar_e_corrigir(sessao: Session, *, simulado_id: int) -> dict:
+def finalizar_e_corrigir(
+    sessao: Session, *, simulado_id: int, solicitante: Usuario
+) -> dict:
     simulado = _obter_simulado(sessao, simulado_id)
+    exigir_dono(simulado, solicitante)
     if simulado.status != StatusSimulado.LIBERADO:
         raise RegraNegocio(
             "só é possível finalizar um simulado que esteja LIBERADO"
@@ -277,8 +350,11 @@ def _validar_questao_para_simulado(questao) -> None:
         )
 
 
-def remover_questao(sessao: Session, *, simulado_id: int, questao_id: int) -> Simulado:
+def remover_questao(
+    sessao: Session, *, simulado_id: int, questao_id: int, solicitante: Usuario
+) -> Simulado:
     simulado = _obter_simulado(sessao, simulado_id)
+    exigir_dono(simulado, solicitante)
     _exigir_editavel(simulado)
 
     alvo = next((sq for sq in simulado.questoes if sq.questao_id == questao_id), None)
@@ -299,9 +375,15 @@ def remover_questao(sessao: Session, *, simulado_id: int, questao_id: int) -> Si
 
 
 def trocar_questao(
-    sessao: Session, *, simulado_id: int, questao_id: int, seed: int | None = None
+    sessao: Session,
+    *,
+    simulado_id: int,
+    questao_id: int,
+    solicitante: Usuario,
+    seed: int | None = None,
 ) -> Simulado:
     simulado = _obter_simulado(sessao, simulado_id)
+    exigir_dono(simulado, solicitante)
     _exigir_editavel(simulado)
 
     alvo = next((sq for sq in simulado.questoes if sq.questao_id == questao_id), None)

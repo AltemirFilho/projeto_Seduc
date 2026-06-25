@@ -11,10 +11,10 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.enums import StatusSimulado
-from app.exceptions import NaoEncontrado
+from app.enums import PerfilUsuario, StatusSimulado
+from app.exceptions import NaoEncontrado, PermissaoNegada
 from app.integrations import ml_service
-from app.models import Aluno, PredicaoRisco
+from app.models import Aluno, PredicaoRisco, Usuario
 from app.repositories import predicao_repository
 
 
@@ -75,10 +75,22 @@ def _aplicar(predicao: PredicaoRisco, resultado: dict, modelo_versao: str) -> No
     predicao.calculada_em = func.now()
 
 
-def calcular_risco(sessao: Session, *, aluno_id: int) -> PredicaoRisco:
+def calcular_risco(
+    sessao: Session, *, aluno_id: int, solicitante: Usuario
+) -> PredicaoRisco:
     aluno = sessao.get(Aluno, aluno_id)
     if aluno is None:
         raise NaoEncontrado(f"aluno {aluno_id} não encontrado")
+
+    # Isolamento sem schema novo: o gestor só vê o risco de aluno de turma que ele
+    # acompanha (já criou algum simulado nela). Admin tem passe livre.
+    if solicitante.perfil != PerfilUsuario.ADMIN:
+        if not predicao_repository.gestor_tem_simulado_na_turma(
+            sessao, gestor_id=solicitante.id, turma_id=aluno.turma_id
+        ):
+            raise PermissaoNegada(
+                "você não acompanha a turma deste aluno", codigo="fora_da_turma"
+            )
 
     features = _features(sessao, aluno)
     if features is None:

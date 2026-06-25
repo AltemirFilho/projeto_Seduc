@@ -1,3 +1,9 @@
+import pytest
+
+from app.exceptions import DadosInvalidos
+from app.services import prova_service
+
+
 def test_cadastro_seis_alternativas_rejeitado(client, h_gestor):
     r = client.post(
         "/questoes",
@@ -90,6 +96,66 @@ def test_finalizar_nao_liberado_falha(client, h_gestor, dados):
     client.post(f"/simulados/{sid}/gerar", headers=h_gestor, json={})
     r = client.post(f"/simulados/{sid}/finalizar", headers=h_gestor, json={})
     assert r.status_code == 409
+
+
+def test_distribuicao_nan_ou_infinito_rejeitada():
+    # NaN/infinito passavam pela checagem de soma (NaN != NaN) e estouravam em round(NaN).
+    with pytest.raises(DadosInvalidos):
+        prova_service._validar_distribuicao({"Fácil": float("nan"), "Médio": 0.5})
+    with pytest.raises(DadosInvalidos):
+        prova_service._validar_distribuicao({"Fácil": float("inf")})
+
+
+def test_distribuicao_nivel_desconhecido_rejeitada(client, h_gestor):
+    # 'Facil' (sem acento) não casa com o nível 'Fácil' do banco: antes a prova saía
+    # aleatória fingindo ser balanceada; agora falha claro (422).
+    r = client.post(
+        "/provas/gerar",
+        headers=h_gestor,
+        json={
+            "serie": "9º ano",
+            "materia": "Matemática",
+            "distribuicao": {"Facil": 0.3, "Médio": 0.5, "Difícil": 0.2},
+        },
+    )
+    assert r.status_code == 422
+    assert r.json()["codigo"] == "dados_invalidos"
+
+
+def test_quantidade_maior_que_o_banco_rejeitada(client, h_gestor):
+    # O banco de teste tem 6 questões: pedir 50 deve falhar claro, não gerar prova curta.
+    r = client.post(
+        "/provas/gerar",
+        headers=h_gestor,
+        json={"serie": "9º ano", "materia": "Matemática", "quantidade": 50},
+    )
+    assert r.status_code == 409
+    assert r.json()["codigo"] == "questoes_insuficientes"
+
+
+def test_importacao_alternativa_malformada_nao_derruba_lote(client, h_gestor):
+    # Alternativa que não é objeto antes virava AttributeError -> 500 no lote inteiro.
+    # Agora é só uma linha rejeitada; as válidas entram.
+    payload = {
+        "questoes": [
+            {
+                "enunciado": "ok?",
+                "etiquetas": {"serie": "9º ano", "materia": "Matemática", "conteudo": "Teste", "nivel": "Fácil"},
+                "alternativas": [{"texto": "2", "correta": True}, {"texto": "3", "correta": False}],
+            },
+            {
+                "enunciado": "malformada",
+                "etiquetas": {"serie": "9º ano", "materia": "Matemática", "conteudo": "Teste", "nivel": "Fácil"},
+                "alternativas": ["x = 2", "x = 4"],
+            },
+        ]
+    }
+    r = client.post("/questoes/import", headers=h_gestor, json=payload)
+    assert r.status_code == 200
+    corpo = r.json()
+    assert corpo["importadas"] == 1
+    assert corpo["rejeitadas"] == 1
+    assert corpo["erros"][0]["linha"] == 2
 
 
 def test_importacao_relatorio_de_erros(client, h_gestor):

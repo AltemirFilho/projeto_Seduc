@@ -21,8 +21,9 @@ from app.config import settings
 from app.enums import StatusSimulado
 from app.exceptions import NaoEncontrado, RegraNegocio
 from app.integrations import claude
-from app.models import DiagnosticoTurma, Simulado
+from app.models import DiagnosticoTurma, Simulado, Usuario
 from app.repositories import diagnostico_repository
+from app.services.simulado_service import exigir_dono
 
 logger = logging.getLogger(__name__)
 
@@ -145,10 +146,13 @@ def _aplicar(diagnostico: DiagnosticoTurma, resultado: dict, modelo_versao: str)
     diagnostico.gerado_em = func.now()
 
 
-def gerar_diagnostico(sessao: Session, *, simulado_id: int) -> DiagnosticoTurma:
+def gerar_diagnostico(
+    sessao: Session, *, simulado_id: int, solicitante: Usuario
+) -> DiagnosticoTurma:
     simulado = sessao.get(Simulado, simulado_id)
     if simulado is None:
         raise NaoEncontrado(f"simulado {simulado_id} não encontrado")
+    exigir_dono(simulado, solicitante)
     if simulado.status != StatusSimulado.FINALIZADO:
         raise RegraNegocio(
             "só simulados finalizados podem ser diagnosticados",
