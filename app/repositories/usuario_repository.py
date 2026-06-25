@@ -8,7 +8,9 @@ from app.models import Aluno, Usuario
 
 
 def buscar_por_email(sessao: Session, email: str) -> Usuario | None:
-    return sessao.scalar(select(Usuario).where(Usuario.email == email))
+    # Normaliza para login e cadastro baterem mesmo com diferença de caixa/espaços.
+    alvo = (email or "").strip().lower()
+    return sessao.scalar(select(Usuario).where(Usuario.email == alvo))
 
 
 def buscar_por_id(sessao: Session, usuario_id: int) -> Usuario | None:

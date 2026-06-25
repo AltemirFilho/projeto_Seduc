@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.enums import PerfilUsuario
@@ -56,14 +57,18 @@ def criar_usuario(
         perfil=perfil_enum,
     )
     sessao.add(usuario)
-    sessao.flush()
+    try:
+        sessao.flush()
+        if perfil_enum is PerfilUsuario.ALUNO:
+            sessao.add(
+                Aluno(usuario_id=usuario.id, turma_id=turma_id, perfil_cognitivo=[])
+            )
+        sessao.commit()
+    except IntegrityError as exc:
+        # Backstop de corrida: o pré-check passou, mas o unique do banco barrou.
+        sessao.rollback()
+        raise RegraNegocio("e-mail já cadastrado", codigo="email_em_uso") from exc
 
-    if perfil_enum is PerfilUsuario.ALUNO:
-        sessao.add(
-            Aluno(usuario_id=usuario.id, turma_id=turma_id, perfil_cognitivo=[])
-        )
-
-    sessao.commit()
     sessao.refresh(usuario)
     return usuario
 

@@ -110,3 +110,31 @@ def test_aluno_barrado(client, h_aluno, dados):
 
 def test_anonimo_barrado(client):
     assert client.get("/usuarios").status_code in (401, 403)
+
+
+def test_listar_nao_vaza_senha_hash(client, h_gestor):
+    r = client.get("/usuarios", headers=h_gestor)
+    assert r.status_code == 200, r.text
+    assert all("senha_hash" not in u for u in r.json()["dados"])
+
+
+def test_criar_email_case_insensitive_409(client, h_gestor):
+    _criar(client, h_gestor, nome="J1", email="Joao@X.gov.br", senha="senha123", perfil="gestor")
+    r = _criar(client, h_gestor, nome="J2", email="joao@x.gov.br", senha="senha123", perfil="gestor")
+    assert r.status_code == 409
+    assert r.json()["codigo"] == "email_em_uso"
+
+
+def test_login_email_case_insensitive(client, h_gestor):
+    # cadastro grava minúsculo; login deve achar mesmo com maiúsculas
+    _criar(client, h_gestor, nome="Caixa Alta", email="Caixa@Alta.gov.br", senha="senha123", perfil="gestor")
+    r = client.post("/auth/login", json={"email": "CAIXA@ALTA.GOV.BR", "senha": "senha123"})
+    assert r.status_code == 200, r.text
+    assert r.json()["usuario"]["email"] == "caixa@alta.gov.br"
+
+
+def test_listar_paginacao(client, h_gestor):
+    r = client.get("/usuarios", headers=h_gestor, params={"por_pagina": 1})
+    assert r.status_code == 200, r.text
+    assert len(r.json()["dados"]) == 1
+    assert r.json()["meta"]["totalPaginas"] >= 2  # a fixture cria 4 usuários
