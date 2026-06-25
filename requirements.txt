@@ -4,4 +4,5 @@ uvicorn[standard]>=0.29
 PyJWT>=2.8
 pydantic-settings>=2.2
 alembic>=1.13
-anthropic>=0.112  # curadoria de simulado por IA (Frente B); precisa de output_config/thinking adaptativo
+anthropic>=0.112  # curadoria/diagnóstico por IA (Frente B); precisa de output_config/thinking adaptativo
+scikit-learn>=1.4  # predição de risco de evasão (Frente B)

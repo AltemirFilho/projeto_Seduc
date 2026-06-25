@@ -7,6 +7,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     Enum as SAEnum,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -342,4 +343,41 @@ class Resposta(Base):
         return (
             f"Resposta(aluno_id={self.aluno_id}, simulado_id={self.simulado_id}, "
             f"questao_id={self.questao_id}, correta={self.correta})"
+        )
+
+
+class PredicaoRisco(Base):
+    """Previsão de risco de evasão de um aluno (Frente B / IA).
+
+    Guarda a previsão mais recente por aluno (1 linha por aluno, atualizada a cada
+    cálculo). `fatores` traz a explicação legível por trás do score — a previsão nunca
+    é caixa-preta.
+    """
+
+    __tablename__ = "predicao_risco"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    aluno_id: Mapped[int] = mapped_column(
+        ForeignKey("alunos.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+    score_risco: Mapped[float] = mapped_column(Float, nullable=False)
+    classificacao: Mapped[str] = mapped_column(String(20), nullable=False)
+    fatores: Mapped[list] = mapped_column(JSON_PORTAVEL, default=list, nullable=False)
+    modelo_versao: Mapped[str] = mapped_column(String(40), nullable=False)
+    calculada_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    aluno: Mapped["Aluno"] = relationship()
+
+    def __repr__(self) -> str:
+        return (
+            f"PredicaoRisco(aluno_id={self.aluno_id}, score={self.score_risco:.2f}, "
+            f"classificacao={self.classificacao!r})"
         )
