@@ -343,3 +343,43 @@ class Resposta(Base):
             f"Resposta(aluno_id={self.aluno_id}, simulado_id={self.simulado_id}, "
             f"questao_id={self.questao_id}, correta={self.correta})"
         )
+
+
+class DiagnosticoTurma(Base):
+    """Diagnóstico pedagógico de um simulado finalizado, gerado por IA (Frente B).
+
+    1 diagnóstico por simulado (o mais recente). Quando a IA está indisponível, o
+    diagnóstico degrada para os dados crus (modelo_versao='indisponivel').
+    """
+
+    __tablename__ = "diagnostico_turma"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    simulado_id: Mapped[int] = mapped_column(
+        ForeignKey("simulados.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+    resumo: Mapped[str] = mapped_column(Text, nullable=False)
+    pontos_fracos: Mapped[list] = mapped_column(
+        JSON_PORTAVEL, default=list, nullable=False
+    )
+    recomendacoes: Mapped[list] = mapped_column(
+        JSON_PORTAVEL, default=list, nullable=False
+    )
+    modelo_versao: Mapped[str] = mapped_column(String(40), nullable=False)
+    gerado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    simulado: Mapped["Simulado"] = relationship()
+
+    def __repr__(self) -> str:
+        return (
+            f"DiagnosticoTurma(simulado_id={self.simulado_id}, "
+            f"modelo={self.modelo_versao!r})"
+        )
