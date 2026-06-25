@@ -13,6 +13,7 @@ from app.api.routers import (
     provas,
     questoes,
     respostas,
+    resultados,
     simulados,
     turmas,
 )
@@ -65,6 +66,7 @@ app.include_router(importacao.router)
 app.include_router(provas.router)
 app.include_router(simulados.router)
 app.include_router(respostas.router)
+app.include_router(resultados.router)
 app.include_router(turmas.router)
 
 
