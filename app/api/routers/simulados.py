@@ -3,8 +3,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_session, obter_usuario_atual, require_gestor
+from app.exceptions import PermissaoNegada
 from app.models import Usuario
-from app.services import simulado_service
+from app.repositories import usuario_repository
+from app.services import relatorio_service, simulado_service
 
 router = APIRouter(prefix="/simulados", tags=["simulados"])
 
@@ -116,6 +118,25 @@ def questoes_do_aluno(
         sessao, simulado_id=simulado_id, solicitante=usuario
     )
     return {"simulado_id": simulado_id, "questoes": questoes}
+
+
+@router.get(
+    "/{simulado_id}/meu-resultado",
+    summary="Resultado individual do próprio aluno (nota, acertos e gabarito)",
+)
+def meu_resultado(
+    simulado_id: int,
+    usuario: Usuario = Depends(obter_usuario_atual),
+    sessao: Session = Depends(get_session),
+) -> dict:
+    aluno = usuario_repository.aluno_do_usuario(sessao, usuario.id)
+    if aluno is None:
+        raise PermissaoNegada(
+            "apenas alunos têm resultado individual", codigo="nao_e_aluno"
+        )
+    return relatorio_service.meu_resultado(
+        sessao, simulado_id=simulado_id, aluno=aluno
+    )
 
 
 @router.post("/{simulado_id}/finalizar", summary="Finalizar e corrigir (gestor dono)")

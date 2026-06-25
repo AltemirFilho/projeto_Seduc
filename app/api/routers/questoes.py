@@ -25,6 +25,19 @@ class CadastrarQuestaoRequest(BaseModel):
     alternativas: list[AlternativaIn]
 
 
+class EditarQuestaoRequest(BaseModel):
+    """Edição parcial: só os campos enviados são alterados."""
+
+    enunciado: str | None = None
+    serie: str | None = None
+    materia: str | None = None
+    conteudo: str | None = None
+    nivel: str | None = None
+    adaptacoes: list[str] | None = None
+    imagem_url: str | None = None
+    alternativas: list[AlternativaIn] | None = None
+
+
 def _serializar(questao: Questao) -> dict:
     return {
         "id": questao.id,
@@ -99,5 +112,43 @@ def cadastrar_questao(
         nivel=req.nivel,
         alternativas=[a.model_dump() for a in req.alternativas],
         adaptacoes=req.adaptacoes,
+    )
+    return _serializar(questao)
+
+
+@router.get(
+    "/{questao_id}",
+    summary="Ver uma questão pelo id (gestor)",
+    dependencies=[Depends(require_gestor)],
+)
+def obter_questao(questao_id: int, sessao: Session = Depends(get_session)) -> dict:
+    return _serializar(questao_service.obter_questao(sessao, questao_id))
+
+
+@router.patch(
+    "/{questao_id}",
+    summary="Editar uma questão (gestor)",
+    dependencies=[Depends(require_gestor)],
+)
+def editar_questao(
+    questao_id: int,
+    req: EditarQuestaoRequest,
+    sessao: Session = Depends(get_session),
+) -> dict:
+    questao = questao_service.editar_questao(
+        sessao,
+        questao_id=questao_id,
+        enunciado=req.enunciado,
+        serie=req.serie,
+        materia=req.materia,
+        conteudo=req.conteudo,
+        nivel=req.nivel,
+        adaptacoes=req.adaptacoes,
+        imagem_url=req.imagem_url,
+        alternativas=(
+            [a.model_dump() for a in req.alternativas]
+            if req.alternativas is not None
+            else None
+        ),
     )
     return _serializar(questao)

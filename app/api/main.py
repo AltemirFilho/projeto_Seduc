@@ -14,9 +14,11 @@ from app.api.routers import (
     importacao,
     provas,
     questoes,
+    relatorios,
     respostas,
     simulados,
     turmas,
+    usuarios,
 )
 from app.config import settings
 from app.exceptions import ErroDominio
@@ -82,6 +84,8 @@ app.include_router(simulados.router)
 app.include_router(respostas.router)
 app.include_router(turmas.router)
 app.include_router(ia.router)
+app.include_router(relatorios.router)
+app.include_router(usuarios.router)
 
 
 _DEMO_PATH = Path(__file__).resolve().parent.parent / "static" / "demo.html"
