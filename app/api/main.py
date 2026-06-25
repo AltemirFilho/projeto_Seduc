@@ -12,6 +12,7 @@ from app.api.routers import (
     importacao,
     provas,
     questoes,
+    relatorios,
     respostas,
     simulados,
     turmas,
@@ -61,6 +62,7 @@ async def _tratar_validacao(request: Request, exc: RequestValidationError) -> JS
 app.include_router(auth.router)
 app.include_router(etiquetas.router)
 app.include_router(questoes.router)
+app.include_router(relatorios.router)
 app.include_router(importacao.router)
 app.include_router(provas.router)
 app.include_router(simulados.router)
