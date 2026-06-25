@@ -129,6 +129,10 @@ def gerar_prova(
     if selecao_ids:
         por_id = {q.id: q for q in candidatas}
         selecionadas = [por_id[i] for i in selecao_ids if i in por_id]
+        # Cobertura incompleta (ex.: questão removida entre as duas buscas): descarta a
+        # seleção curada e cai na seleção clássica, em vez de gerar uma prova curta.
+        if len(selecionadas) < quantidade:
+            selecionadas = []
 
     if not selecionadas:
         if distribuicao:

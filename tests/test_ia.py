@@ -38,6 +38,17 @@ def _ids_candidatas(Sessao):
         return [q.id for q in cands]
 
 
+def _ids_por_nivel(Sessao):
+    with Sessao() as s:
+        cands = questao_repository.filtrar_questoes(
+            s, serie="9º ano", materias=["Matemática"]
+        )
+        por_nivel: dict[str, list[int]] = {}
+        for q in cands:
+            por_nivel.setdefault(q.nivel.nome, []).append(q.id)
+        return por_nivel
+
+
 def test_disponivel_so_com_flag_e_chave(monkeypatch):
     from app.config import settings
 
@@ -128,4 +139,54 @@ def test_ia_falha_cai_no_classico(client, h_gestor, dados, monkeypatch):
     corpo = _gerar(client, h_gestor, sid)
     meta = corpo["parametros"]["ia_curadoria"]
     assert meta["fonte"] == "classico"
-    assert meta["motivo"].startswith("ia_falhou")
+    # Motivo estável (sem vazar o erro cru da Anthropic em parametros_json).
+    assert meta["motivo"] == "ia_falhou"
+
+
+def test_ia_confianca_invalida_cai_no_classico(client, h_gestor, dados, Sessao, monkeypatch):
+    # Confiança ausente/None deve falhar fechado, não passar batido pelo piso.
+    ids = _ids_candidatas(Sessao)
+    monkeypatch.setattr(claude_mod, "disponivel", lambda: True)
+    monkeypatch.setattr(
+        claude_mod,
+        "completar_json",
+        lambda **kwargs: {"questao_ids": ids[:3], "confianca": None},
+    )
+    sid = _criar_simulado(client, h_gestor, dados["turma_id"], quantidade=3)
+    corpo = _gerar(client, h_gestor, sid)
+    meta = corpo["parametros"]["ia_curadoria"]
+    assert meta["fonte"] == "classico"
+    assert meta["motivo"] == "confianca_invalida"
+
+
+def test_ia_distribuicao_nao_atendida_cai_no_classico(
+    client, h_gestor, dados, Sessao, monkeypatch
+):
+    # Distribuição pede maioria 'Fácil', mas a IA devolve só Difícil+Médio -> rejeita.
+    por_nivel = _ids_por_nivel(Sessao)
+    escolhidos = por_nivel["Difícil"][:2] + por_nivel["Médio"][:1]
+    monkeypatch.setattr(claude_mod, "disponivel", lambda: True)
+    monkeypatch.setattr(
+        claude_mod,
+        "completar_json",
+        lambda **kwargs: {"questao_ids": escolhidos, "confianca": 0.9},
+    )
+    r = client.post(
+        "/simulados",
+        headers=h_gestor,
+        json={
+            "turma_id": dados["turma_id"],
+            "titulo": "Simulado IA dist",
+            "serie": "9º ano",
+            "materia": "Matemática",
+            "quantidade": 3,
+            "distribuicao": {"Fácil": 0.6, "Médio": 0.2, "Difícil": 0.2},
+            "seed": 7,
+        },
+    )
+    assert r.status_code == 201, r.text
+    corpo = _gerar(client, h_gestor, r.json()["id"])
+    assert corpo["total_questoes"] == 3
+    meta = corpo["parametros"]["ia_curadoria"]
+    assert meta["fonte"] == "classico"
+    assert meta["motivo"] == "distribuicao_nao_atendida"

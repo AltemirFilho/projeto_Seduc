@@ -45,6 +45,8 @@ def disponivel() -> bool:
 
 @lru_cache(maxsize=1)
 def _cliente():
+    # Memoizado: lê a config no 1º uso. Trocar SEDU_ANTHROPIC_API_KEY/timeout/retries
+    # exige reiniciar o processo (config é imutável por ambiente).
     import anthropic
 
     return anthropic.Anthropic(
@@ -55,7 +57,7 @@ def _cliente():
 
 
 def completar_json(
-    *, system: str, conteudo: str, schema: dict[str, Any], max_tokens: int = 8192
+    *, system: str, conteudo: str, schema: dict[str, Any], max_tokens: int = 16000
 ) -> dict[str, Any]:
     """Pede à Claude API uma resposta JSON validada contra `schema`.
 
@@ -86,9 +88,13 @@ def completar_json(
             output_config={"format": {"type": "json_schema", "schema": schema}},
         )
     except anthropic.APIError as exc:
-        raise IAIndisponivel(f"falha na chamada à Claude API: {exc}") from exc
-    except Exception as exc:  # rede, parâmetro não suportado, etc.
-        raise IAIndisponivel(f"erro inesperado na Claude API: {exc}") from exc
+        # Detalhe (e tipo) só no log do servidor; a mensagem que sobe é genérica
+        # para não persistir/expor o corpo de erro da Anthropic em parametros_json.
+        logger.warning("Falha na Claude API (%s): %s", type(exc).__name__, exc)
+        raise IAIndisponivel("falha na chamada à Claude API") from exc
+    except Exception as exc:  # rede, parâmetro do SDK não suportado (ex.: versão antiga), etc.
+        logger.warning("Erro inesperado na Claude API (%s): %s", type(exc).__name__, exc)
+        raise IAIndisponivel("erro inesperado na Claude API") from exc
 
     if resposta.stop_reason == "refusal":
         raise IAIndisponivel("a Claude API recusou a requisição (stop_reason=refusal)")

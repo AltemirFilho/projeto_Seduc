@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     ia_curadoria_confianca_minima: float = 0.5
     # Teto de questões candidatas enviadas à IA (controle de custo/tokens).
     ia_curadoria_max_candidatas: int = 200
+    # Tolerância (fração de 'quantidade') de desvio por nível antes de a seleção da
+    # IA ser rejeitada por não respeitar a distribuição de dificuldade pedida.
+    ia_curadoria_tolerancia_distribuicao: float = 0.2
 
     @property
     def em_producao(self) -> bool:

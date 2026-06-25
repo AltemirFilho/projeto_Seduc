@@ -28,7 +28,6 @@ _SCHEMA_SELECAO = {
     "type": "object",
     "properties": {
         "questao_ids": {"type": "array", "items": {"type": "integer"}},
-        "justificativa": {"type": "string"},
         "confianca": {"type": "number"},
     },
     "required": ["questao_ids", "confianca"],
@@ -62,6 +61,33 @@ def _descrever_candidatas(candidatas: list[Questao]) -> str:
             f"| nivel={q.nivel.nome} | enunciado: {enunciado}"
         )
     return "\n".join(linhas)
+
+
+def _distribuicao_respeitada(
+    ids: list[int],
+    candidatas: list[Questao],
+    distribuicao: Optional[dict[str, float]],
+    quantidade: int,
+) -> bool:
+    """A seleção da IA respeita a distribuição de dificuldade pedida (com tolerância)?
+
+    Sem distribuição pedida, nada a checar. A folga (em nº de questões) por nível evita
+    rejeitar a seleção só por arredondamento — espelha o melhor-esforço do caminho
+    clássico em vez de exigir uma curva exata.
+    """
+    if not distribuicao:
+        return True
+    nivel_por_id = {q.id: q.nivel.nome for q in candidatas}
+    contagem: dict[str, int] = {}
+    for i in ids:
+        nome = nivel_por_id.get(i)
+        contagem[nome] = contagem.get(nome, 0) + 1
+    folga = max(1, round(settings.ia_curadoria_tolerancia_distribuicao * quantidade))
+    for nivel_nome, proporcao in distribuicao.items():
+        alvo = round(quantidade * proporcao)
+        if abs(contagem.get(nivel_nome, 0) - alvo) > folga:
+            return False
+    return True
 
 
 def selecionar_questoes(
@@ -121,7 +147,7 @@ def selecionar_questoes(
         )
     except claude.IAIndisponivel as exc:
         logger.warning("Curadoria por IA falhou, usando fallback clássico: %s", exc)
-        return None, {"fonte": "classico", "motivo": f"ia_falhou: {exc}", "confianca": None}
+        return None, {"fonte": "classico", "motivo": "ia_falhou", "confianca": None}
 
     confianca = resultado.get("confianca")
 
@@ -146,10 +172,17 @@ def selecionar_questoes(
             "confianca": confianca,
         }
 
-    if (
-        isinstance(confianca, (int, float))
-        and confianca < settings.ia_curadoria_confianca_minima
-    ):
+    # Falha fechado: confiança ausente/não-numérica (ou booleana) não é confiável.
+    # bool é subclasse de int em Python, então excluímos explicitamente.
+    if not isinstance(confianca, (int, float)) or isinstance(confianca, bool):
+        logger.warning("Confiança da IA inválida (%r); fallback clássico.", confianca)
+        return None, {
+            "fonte": "classico",
+            "motivo": "confianca_invalida",
+            "confianca": confianca,
+        }
+
+    if confianca < settings.ia_curadoria_confianca_minima:
         logger.info(
             "Confiança da IA (%.2f) abaixo do mínimo (%.2f); fallback clássico.",
             confianca,
@@ -161,4 +194,15 @@ def selecionar_questoes(
             "confianca": confianca,
         }
 
-    return ids_limpos[:quantidade], {"fonte": "ia", "motivo": None, "confianca": confianca}
+    selecionados = ids_limpos[:quantidade]
+    # A distribuição entra no prompt como desejo; aqui garantimos que a seleção da IA
+    # de fato a respeita (com tolerância), senão caímos no clássico — que a impõe.
+    if not _distribuicao_respeitada(selecionados, candidatas_ia, distribuicao, quantidade):
+        logger.info("Seleção da IA não respeitou a distribuição pedida; fallback clássico.")
+        return None, {
+            "fonte": "classico",
+            "motivo": "distribuicao_nao_atendida",
+            "confianca": confianca,
+        }
+
+    return selecionados, {"fonte": "ia", "motivo": None, "confianca": confianca}
