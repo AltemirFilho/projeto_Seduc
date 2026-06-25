@@ -27,7 +27,7 @@ Aconteceu um incidente em que uma sincronização apagou o trabalho de outra pes
 
 ## FRENTE A — Resultados, Relatórios e Gestão (sem IA)
 
-**Responsável:** Altemir · **Branch:** `feat/relatorios-gestao`
+**Responsável:** Sócio · **Branch:** `feat/relatorios-gestao`
 
 **Entregas (Backlog Épicos 2, 3, 6):**
 1. `GET /relatorios/turma/{turma_id}` — média da turma, ranking de conteúdos por taxa de erro, nº de alunos. Derivado da tabela `respostas` (sem IA).
@@ -46,7 +46,7 @@ Aconteceu um incidente em que uma sincronização apagou o trabalho de outra pes
 
 ## FRENTE B — Inteligência Artificial e Infraestrutura
 
-**Responsável:** Sócio · **Branch:** `feat/ia-infra`
+**Responsável:** Altemir · **Branch:** `feat/ia-infra`
 
 **Entregas (Backlog Épicos 4, 7 + infra):**
 1. **Curadoria por IA (Claude API)** — `app/integrations/claude.py` + `app/services/ia_curadoria_service.py`. O `gerar_e_persistir` do simulado passa a chamar a IA para balancear/ordenar; com **fallback para a seleção clássica** (`prova_service`) em caso de timeout/baixa confiança (marca flag). Resiliência: timeout + retry.
