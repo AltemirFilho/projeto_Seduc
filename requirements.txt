@@ -4,3 +4,4 @@ uvicorn[standard]>=0.29
 PyJWT>=2.8
 pydantic-settings>=2.2
 alembic>=1.13
+reportlab>=4.0
