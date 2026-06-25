@@ -50,7 +50,7 @@ def _modelo():
 
     X = [list(features) for features, _ in _SEMENTE]
     y = [rotulo for _, rotulo in _SEMENTE]
-    modelo = LogisticRegression()
+    modelo = LogisticRegression(max_iter=1000)
     modelo.fit(X, y)
     return modelo
 
@@ -63,15 +63,29 @@ def _classificar(score: float) -> str:
     return "alto"
 
 
-def _fatores(media_nota: float, taxa_participacao: float, taxa_acerto: float) -> list[str]:
+def _fatores(
+    media_nota: float,
+    taxa_participacao: float,
+    taxa_acerto: float,
+    classificacao: str,
+) -> list[str]:
+    """Explicação coerente com a classificação (a previsão nunca é caixa-preta).
+
+    Risco baixo => sem fatores. Risco médio/alto => sempre ao menos um fator: os
+    sinais abaixo do ideal, ou um motivo genérico honesto quando nenhum sinal isolado
+    se destaca (o conjunto é que puxou o risco). Os limiares são mais generosos que a
+    fronteira do modelo de propósito, para nunca contradizer a classificação.
+    """
+    if classificacao == "baixo":
+        return ["sem fatores de risco relevantes"]
     fatores: list[str] = []
-    if taxa_participacao < 0.5:
+    if taxa_participacao < 0.6:
         fatores.append(f"participação baixa ({taxa_participacao * 100:.0f}%)")
-    if media_nota < 5.0:
+    if media_nota < 6.0:
         fatores.append(f"média baixa ({media_nota:.1f})")
-    if taxa_acerto < 0.5:
+    if taxa_acerto < 0.6:
         fatores.append(f"taxa de acerto baixa ({taxa_acerto * 100:.0f}%)")
-    return fatores or ["sem fatores de risco relevantes"]
+    return fatores or ["desempenho e engajamento intermediários"]
 
 
 def prever(
@@ -79,9 +93,12 @@ def prever(
 ) -> dict:
     """Devolve {score_risco, classificacao, fatores} para as features de um aluno."""
     features = [[media_nota / 10.0, taxa_participacao, taxa_acerto]]
-    score = float(_modelo().predict_proba(features)[0][1])
+    # Arredonda uma vez só e classifica a partir DESSE valor, para o rótulo bater
+    # sempre com o número devolvido/persistido (sem divergência na borda do limiar).
+    score = round(float(_modelo().predict_proba(features)[0][1]), 4)
+    classificacao = _classificar(score)
     return {
-        "score_risco": round(score, 4),
-        "classificacao": _classificar(score),
-        "fatores": _fatores(media_nota, taxa_participacao, taxa_acerto),
+        "score_risco": score,
+        "classificacao": classificacao,
+        "fatores": _fatores(media_nota, taxa_participacao, taxa_acerto, classificacao),
     }

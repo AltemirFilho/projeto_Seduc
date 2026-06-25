@@ -7,7 +7,8 @@ As queries ficam no `predicao_repository`; o modelo, no `ml_service`.
 
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.enums import StatusSimulado
@@ -24,15 +25,24 @@ def _features(sessao: Session, aluno: Aluno) -> dict | None:
     )
     if not avaliaveis:
         return None
+    ids_avaliaveis = {s.id for s in avaliaveis}
 
-    respostas = predicao_repository.respostas_do_aluno(sessao, aluno.id)
+    # Só as respostas dentro do universo avaliável desta turma — assim as três features
+    # (participação, acerto e média) saem do mesmo conjunto e ficam coerentes mesmo se
+    # houver respostas de outra turma (ex.: aluno transferido).
+    respostas = [
+        r
+        for r in predicao_repository.respostas_do_aluno(sessao, aluno.id)
+        if r.simulado_id in ids_avaliaveis
+    ]
     respondidas = len(respostas)
     acertos = sum(1 for r in respostas if r.correta)
     taxa_acerto = acertos / respondidas if respondidas else 0.0
 
+    # Participação: simulados em que respondeu ao menos 1 questão / avaliáveis.
+    # (Aproximação consciente do MVP: respondeu 1 questão conta como participação no simulado.)
     ids_respondidos = {r.simulado_id for r in respostas}
-    ids_avaliaveis = {s.id for s in avaliaveis}
-    taxa_participacao = len(ids_respondidos & ids_avaliaveis) / len(ids_avaliaveis)
+    taxa_participacao = len(ids_respondidos) / len(ids_avaliaveis)
 
     # Média de nota nos simulados FINALIZADOS em que o aluno participou.
     acertos_por_sim: dict[int, int] = {}
@@ -55,6 +65,16 @@ def _features(sessao: Session, aluno: Aluno) -> dict | None:
     }
 
 
+def _aplicar(predicao: PredicaoRisco, resultado: dict, modelo_versao: str) -> None:
+    predicao.score_risco = resultado["score_risco"]
+    predicao.classificacao = resultado["classificacao"]
+    predicao.fatores = resultado["fatores"]
+    predicao.modelo_versao = modelo_versao
+    # Explícito (não confia no onupdate): faz o timestamp avançar mesmo quando o
+    # resultado é idêntico ao anterior — aí o SQLAlchemy não emitiria UPDATE sozinho.
+    predicao.calculada_em = func.now()
+
+
 def calcular_risco(sessao: Session, *, aluno_id: int) -> PredicaoRisco:
     aluno = sessao.get(Aluno, aluno_id)
     if aluno is None:
@@ -62,6 +82,8 @@ def calcular_risco(sessao: Session, *, aluno_id: int) -> PredicaoRisco:
 
     features = _features(sessao, aluno)
     if features is None:
+        # Sem dados para prever: 'indeterminado' é o discriminador. score_risco=0.0 é
+        # só placeholder — não ordenar por ele quando classificacao == 'indeterminado'.
         resultado = {
             "score_risco": 0.0,
             "classificacao": "indeterminado",
@@ -78,11 +100,19 @@ def calcular_risco(sessao: Session, *, aluno_id: int) -> PredicaoRisco:
     if predicao is None:
         predicao = PredicaoRisco(aluno_id=aluno_id)
         sessao.add(predicao)
-    predicao.score_risco = resultado["score_risco"]
-    predicao.classificacao = resultado["classificacao"]
-    predicao.fatores = resultado["fatores"]
-    predicao.modelo_versao = modelo_versao
+    _aplicar(predicao, resultado, modelo_versao)
 
-    sessao.commit()
+    try:
+        sessao.commit()
+    except IntegrityError:
+        # Corrida na 1ª gravação do mesmo aluno (índice unique em aluno_id): recupera a
+        # linha que a outra requisição inseriu e atualiza, em vez de estourar 500.
+        sessao.rollback()
+        predicao = sessao.scalar(
+            select(PredicaoRisco).where(PredicaoRisco.aluno_id == aluno_id)
+        )
+        _aplicar(predicao, resultado, modelo_versao)
+        sessao.commit()
+
     sessao.refresh(predicao)
     return predicao

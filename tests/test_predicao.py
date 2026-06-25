@@ -98,3 +98,23 @@ def test_risco_exige_gestor(client, h_aluno, dados, Sessao):
 def test_risco_aluno_inexistente(client, h_gestor):
     r = client.get("/ia/risco/99999", headers=h_gestor)
     assert r.status_code == 404
+
+
+def test_fatores_sempre_coerentes_com_classificacao():
+    # A explicabilidade nunca pode contradizer o risco: risco != baixo => há fatores.
+    from app.integrations import ml_service
+
+    valores = [i / 10 for i in range(11)]  # 0.0 .. 1.0
+    for participacao in valores:
+        for acerto in valores:
+            r = ml_service.prever(
+                media_nota=acerto * 10,
+                taxa_participacao=participacao,
+                taxa_acerto=acerto,
+            )
+            if r["classificacao"] != "baixo":
+                assert r["fatores"] != ["sem fatores de risco relevantes"], (
+                    participacao,
+                    acerto,
+                    r,
+                )
