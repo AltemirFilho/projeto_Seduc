@@ -3,7 +3,12 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.enums import PerfilUsuario
-from app.exceptions import DadosInvalidos, NaoEncontrado, RegraNegocio
+from app.exceptions import (
+    DadosInvalidos,
+    NaoEncontrado,
+    PermissaoNegada,
+    RegraNegocio,
+)
 from app.models import Aluno, Usuario
 from app.repositories import turma_repository, usuario_repository
 from app.services import auth_service
@@ -28,6 +33,7 @@ def criar_usuario(
     email: str,
     senha: str,
     perfil: str,
+    solicitante: Usuario,
     turma_id: int | None = None,
 ) -> Usuario:
     nome = (nome or "").strip()
@@ -40,6 +46,13 @@ def criar_usuario(
         raise DadosInvalidos(f"a senha deve ter ao menos {SENHA_MINIMA} caracteres")
 
     perfil_obj = _perfil_de(perfil)
+
+    # Teto de privilégio: ninguém cria um ADMIN além de outro ADMIN (evita um gestor
+    # escalar para o tier que tem passe livre em todo o isolamento).
+    if perfil_obj == PerfilUsuario.ADMIN and solicitante.perfil != PerfilUsuario.ADMIN:
+        raise PermissaoNegada(
+            "apenas um admin pode criar outro admin", codigo="perfil_acima_do_seu"
+        )
 
     if usuario_repository.buscar_por_email(sessao, email) is not None:
         raise RegraNegocio("já existe um usuário com este email", codigo="email_em_uso")

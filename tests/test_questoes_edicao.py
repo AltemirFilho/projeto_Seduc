@@ -76,6 +76,39 @@ def test_editar_nivel_inexistente_404(client, h_gestor):
     assert r.status_code == 404
 
 
+def test_nao_edita_questao_em_uso(client, h_gestor, dados):
+    # Questão que já entrou num simulado é congelada: editar -> 409, e a prova continua íntegra.
+    r = client.post(
+        "/simulados",
+        headers=h_gestor,
+        json={
+            "turma_id": dados["turma_id"],
+            "titulo": "S",
+            "serie": "9º ano",
+            "materia": "Matemática",
+            "quantidade": 3,
+            "seed": 7,
+        },
+    )
+    sid = r.json()["id"]
+    client.post(f"/simulados/{sid}/gerar", headers=h_gestor, json={})
+    prev = client.get(f"/simulados/{sid}/preview", headers=h_gestor).json()["questoes"]
+    qid = prev[0]["questao_id"]
+
+    rr = client.patch(f"/questoes/{qid}", headers=h_gestor, json={"enunciado": "alterado"})
+    assert rr.status_code == 409
+    assert rr.json()["codigo"] == "questao_em_uso"
+
+    rr2 = client.patch(
+        f"/questoes/{qid}",
+        headers=h_gestor,
+        json={"alternativas": [{"texto": "a", "correta": True}, {"texto": "b", "correta": False}]},
+    )
+    assert rr2.status_code == 409
+    # a prova segue consistente (nenhuma alternativa foi apagada)
+    assert client.get(f"/simulados/{sid}/preview", headers=h_gestor).status_code == 200
+
+
 def test_aluno_nao_ve_nem_edita(client, h_gestor, h_aluno):
     qid = _cria_questao(client, h_gestor)
     assert client.get(f"/questoes/{qid}", headers=h_aluno).status_code == 403

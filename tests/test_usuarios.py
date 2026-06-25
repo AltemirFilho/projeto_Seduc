@@ -1,6 +1,34 @@
 """Testes do cadastro/listagem de usuários (Épico 2)."""
 
 
+def _login(client, email, senha="sedu123"):
+    r = client.post("/auth/login", json={"email": email, "senha": senha})
+    assert r.status_code == 200, r.text
+    return {"Authorization": f"Bearer {r.json()['token']}"}
+
+
+def test_gestor_nao_cria_admin(client, h_gestor):
+    # Escalonamento de privilégio barrado: gestor não promove ninguém a admin.
+    r = client.post(
+        "/usuarios",
+        headers=h_gestor,
+        json={"nome": "X", "email": "viraadmin@x.gov.br", "senha": "sedu123", "perfil": "admin"},
+    )
+    assert r.status_code == 403
+    assert r.json()["codigo"] == "perfil_acima_do_seu"
+
+
+def test_admin_cria_admin(client):
+    h = _login(client, "admin@x.gov.br")
+    r = client.post(
+        "/usuarios",
+        headers=h,
+        json={"nome": "Admin 2", "email": "admin2@x.gov.br", "senha": "sedu123", "perfil": "admin"},
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["perfil"] == "admin"
+
+
 def test_gestor_cria_aluno_vinculado_a_turma(client, h_gestor, dados):
     r = client.post(
         "/usuarios",

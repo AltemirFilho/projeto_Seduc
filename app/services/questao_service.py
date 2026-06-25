@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from app.exceptions import DadosInvalidos, NaoEncontrado
+from app.exceptions import DadosInvalidos, NaoEncontrado, RegraNegocio
 from app.models import Alternativa, Conteudo, Materia, Questao
-from app.repositories import etiqueta_repository
+from app.repositories import etiqueta_repository, questao_repository
 
 MAX_ALTERNATIVAS = 5
 
@@ -139,8 +139,17 @@ def editar_questao(
     imagem_url: str | None = None,
     alternativas: list[dict] | None = None,
 ) -> Questao:
-    """Edição parcial (PATCH): campos com None não são alterados."""
+    """Edição parcial (PATCH): campos com None não são alterados.
+
+    Questão já usada em simulado é congelada: editá-la corromperia o caderno/gabarito já
+    gerado (SimuladoQuestao.alternativas_ordem) e a correção persistida.
+    """
     questao = obter_questao(sessao, questao_id)
+    if questao_repository.questao_em_uso(sessao, questao_id):
+        raise RegraNegocio(
+            "a questão já foi usada em um simulado e não pode mais ser editada",
+            codigo="questao_em_uso",
+        )
 
     if enunciado is not None:
         novo = enunciado.strip()

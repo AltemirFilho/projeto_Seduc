@@ -5,7 +5,7 @@ from typing import Optional, Sequence
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import Conteudo, Materia, Nivel, Questao, Serie
+from app.models import Conteudo, Materia, Nivel, Questao, Serie, SimuladoQuestao
 
 
 def filtrar_questoes(
@@ -53,6 +53,20 @@ def filtrar_questoes(
         questoes = questoes[:limite]
 
     return questoes
+
+
+def questao_em_uso(sessao: Session, questao_id: int) -> bool:
+    """True se a questão já entrou em algum simulado (há SimuladoQuestao apontando para
+    ela). Questões em uso são congeladas: editá-las corromperia o caderno/gabarito já
+    gerado e a correção persistida."""
+    return (
+        sessao.scalar(
+            select(SimuladoQuestao.id)
+            .where(SimuladoQuestao.questao_id == questao_id)
+            .limit(1)
+        )
+        is not None
+    )
 
 
 def buscar_paginado(

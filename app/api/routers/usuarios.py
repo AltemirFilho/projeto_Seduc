@@ -31,10 +31,11 @@ def _serializar(usuario: Usuario) -> dict:
     "",
     status_code=status.HTTP_201_CREATED,
     summary="Cadastrar usuário e vincular aluno à turma (gestor/admin)",
-    dependencies=[Depends(require_gestor)],
 )
 def criar_usuario(
-    req: CriarUsuarioRequest, sessao: Session = Depends(get_session)
+    req: CriarUsuarioRequest,
+    solicitante: Usuario = Depends(require_gestor),
+    sessao: Session = Depends(get_session),
 ) -> dict:
     usuario = usuario_service.criar_usuario(
         sessao,
@@ -42,6 +43,7 @@ def criar_usuario(
         email=req.email,
         senha=req.senha,
         perfil=req.perfil,
+        solicitante=solicitante,
         turma_id=req.turma_id,
     )
     return _serializar(usuario)
