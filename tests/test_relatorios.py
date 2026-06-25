@@ -131,3 +131,15 @@ def test_relatorio_turma_inexistente(client, h_gestor):
     r = client.get("/relatorios/turma/99999", headers=h_gestor)
     assert r.status_code == 404
     assert r.json()["codigo"] == "nao_encontrado"
+
+
+def test_relatorio_turma_sem_respostas(client, h_gestor, dados):
+    # Turma existe mas sem nenhuma resposta: 200 com zeros (guard de divisão por zero).
+    r = client.get(f"/relatorios/turma/{dados['turma_id']}", headers=h_gestor)
+    assert r.status_code == 200, r.text
+    c = r.json()
+    assert c["total_respostas"] == 0
+    assert c["total_acertos"] == 0
+    assert c["media_acerto"] == 0.0
+    assert c["conteudos"] == []
+    assert c["total_alunos"] == 2
