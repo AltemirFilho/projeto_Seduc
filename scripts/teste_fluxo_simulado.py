@@ -78,11 +78,17 @@ def main() -> None:
         print(f"1) Criado     -> id={simulado_id}, status={simulado.status.value}")
 
     with SessionLocal() as sessao:
-        simulado = simulado_service.gerar_e_persistir(sessao, simulado_id=simulado_id)
+        gestor = sessao.get(Usuario, gestor_id)
+        simulado = simulado_service.gerar_e_persistir(
+            sessao, simulado_id=simulado_id, solicitante=gestor
+        )
         print(f"2) Gerado     -> {len(simulado.questoes)} questoes, status={simulado.status.value}")
 
     with SessionLocal() as sessao:
-        simulado = simulado_service.liberar(sessao, simulado_id=simulado_id)
+        gestor = sessao.get(Usuario, gestor_id)
+        simulado = simulado_service.liberar(
+            sessao, simulado_id=simulado_id, solicitante=gestor
+        )
         print(f"3) Liberado   -> status={simulado.status.value}")
 
     with SessionLocal() as sessao:
@@ -105,7 +111,10 @@ def main() -> None:
         print(f"4) Respondido -> {len(questoes)} questoes (3 corretas de proposito)")
 
     with SessionLocal() as sessao:
-        resultado = simulado_service.finalizar_e_corrigir(sessao, simulado_id=simulado_id)
+        gestor = sessao.get(Usuario, gestor_id)
+        resultado = simulado_service.finalizar_e_corrigir(
+            sessao, simulado_id=simulado_id, solicitante=gestor
+        )
         print("5) Corrigido  ->")
         for r in resultado["resultados"]:
             print(

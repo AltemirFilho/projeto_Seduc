@@ -74,85 +74,94 @@ def gerar(
     sessao: Session = Depends(get_session),
 ) -> dict:
     simulado = simulado_service.gerar_e_persistir(
-        sessao, simulado_id=simulado_id, seed=req.seed
+        sessao, simulado_id=simulado_id, solicitante=usuario, seed=req.seed
     )
     return _resumo(simulado)
 
 
-@router.get(
-    "/{simulado_id}/preview",
-    summary="Prévia COM gabarito (gestor)",
-    dependencies=[Depends(require_gestor)],
-)
-def preview(simulado_id: int, sessao: Session = Depends(get_session)) -> dict:
-    questoes = simulado_service.montar_questoes(
-        sessao, simulado_id=simulado_id, incluir_gabarito=True
+@router.get("/{simulado_id}/preview", summary="Prévia COM gabarito (gestor dono)")
+def preview(
+    simulado_id: int,
+    usuario: Usuario = Depends(require_gestor),
+    sessao: Session = Depends(get_session),
+) -> dict:
+    questoes = simulado_service.montar_questoes_preview(
+        sessao, simulado_id=simulado_id, solicitante=usuario
     )
     return {"simulado_id": simulado_id, "questoes": questoes}
 
 
-@router.post(
-    "/{simulado_id}/liberar",
-    summary="Liberar para os alunos (gestor)",
-    dependencies=[Depends(require_gestor)],
-)
-def liberar(simulado_id: int, sessao: Session = Depends(get_session)) -> dict:
-    simulado = simulado_service.liberar(sessao, simulado_id=simulado_id)
+@router.post("/{simulado_id}/liberar", summary="Liberar para os alunos (gestor dono)")
+def liberar(
+    simulado_id: int,
+    usuario: Usuario = Depends(require_gestor),
+    sessao: Session = Depends(get_session),
+) -> dict:
+    simulado = simulado_service.liberar(
+        sessao, simulado_id=simulado_id, solicitante=usuario
+    )
     return _resumo(simulado)
 
 
 @router.get(
     "/{simulado_id}/questoes",
-    summary="Questões do simulado SEM gabarito (visão do aluno)",
-    dependencies=[Depends(obter_usuario_atual)],
+    summary="Questões do simulado SEM gabarito (visão do aluno da turma)",
 )
 def questoes_do_aluno(
-    simulado_id: int, sessao: Session = Depends(get_session)
+    simulado_id: int,
+    usuario: Usuario = Depends(obter_usuario_atual),
+    sessao: Session = Depends(get_session),
 ) -> dict:
-    questoes = simulado_service.montar_questoes(
-        sessao, simulado_id=simulado_id, incluir_gabarito=False
+    questoes = simulado_service.montar_questoes_do_aluno(
+        sessao, simulado_id=simulado_id, solicitante=usuario
     )
     return {"simulado_id": simulado_id, "questoes": questoes}
 
 
-@router.post(
-    "/{simulado_id}/finalizar",
-    summary="Finalizar e corrigir (gestor)",
-    dependencies=[Depends(require_gestor)],
-)
-def finalizar(simulado_id: int, sessao: Session = Depends(get_session)) -> dict:
-    return simulado_service.finalizar_e_corrigir(sessao, simulado_id=simulado_id)
+@router.post("/{simulado_id}/finalizar", summary="Finalizar e corrigir (gestor dono)")
+def finalizar(
+    simulado_id: int,
+    usuario: Usuario = Depends(require_gestor),
+    sessao: Session = Depends(get_session),
+) -> dict:
+    return simulado_service.finalizar_e_corrigir(
+        sessao, simulado_id=simulado_id, solicitante=usuario
+    )
 
 
 @router.delete(
     "/{simulado_id}/questoes/{questao_id}",
-    summary="Remover uma questão do simulado (gestor, antes de liberar)",
-    dependencies=[Depends(require_gestor)],
+    summary="Remover uma questão do simulado (gestor dono, antes de liberar)",
 )
 def remover_questao(
-    simulado_id: int, questao_id: int, sessao: Session = Depends(get_session)
+    simulado_id: int,
+    questao_id: int,
+    usuario: Usuario = Depends(require_gestor),
+    sessao: Session = Depends(get_session),
 ) -> dict:
     simulado_service.remover_questao(
-        sessao, simulado_id=simulado_id, questao_id=questao_id
+        sessao, simulado_id=simulado_id, questao_id=questao_id, solicitante=usuario
     )
-    questoes = simulado_service.montar_questoes(
-        sessao, simulado_id=simulado_id, incluir_gabarito=True
+    questoes = simulado_service.montar_questoes_preview(
+        sessao, simulado_id=simulado_id, solicitante=usuario
     )
     return {"simulado_id": simulado_id, "questoes": questoes}
 
 
 @router.post(
     "/{simulado_id}/questoes/{questao_id}/trocar",
-    summary="Trocar uma questão por outra equivalente (gestor, antes de liberar)",
-    dependencies=[Depends(require_gestor)],
+    summary="Trocar uma questão por outra equivalente (gestor dono, antes de liberar)",
 )
 def trocar_questao(
-    simulado_id: int, questao_id: int, sessao: Session = Depends(get_session)
+    simulado_id: int,
+    questao_id: int,
+    usuario: Usuario = Depends(require_gestor),
+    sessao: Session = Depends(get_session),
 ) -> dict:
     simulado_service.trocar_questao(
-        sessao, simulado_id=simulado_id, questao_id=questao_id
+        sessao, simulado_id=simulado_id, questao_id=questao_id, solicitante=usuario
     )
-    questoes = simulado_service.montar_questoes(
-        sessao, simulado_id=simulado_id, incluir_gabarito=True
+    questoes = simulado_service.montar_questoes_preview(
+        sessao, simulado_id=simulado_id, solicitante=usuario
     )
     return {"simulado_id": simulado_id, "questoes": questoes}

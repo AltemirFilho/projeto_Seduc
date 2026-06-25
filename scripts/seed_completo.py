@@ -340,10 +340,12 @@ def _semear_simulados(sessao, gestor, turmas, alunos, rng):
                 f"Simulado Matemática {turma.nome} — Diagnóstico {k}",
                 quantidade=10, seed=seed_base + ti * 10 + k,
             )
-            simulado_service.gerar_e_persistir(sessao, simulado_id=sim.id, seed=sim.id)
-            simulado_service.liberar(sessao, simulado_id=sim.id)
+            simulado_service.gerar_e_persistir(
+                sessao, simulado_id=sim.id, solicitante=gestor, seed=sim.id
+            )
+            simulado_service.liberar(sessao, simulado_id=sim.id, solicitante=gestor)
             _responder(sessao, sim.id, alunos_turma, rng, completo=True)
-            simulado_service.finalizar_e_corrigir(sessao, simulado_id=sim.id)
+            simulado_service.finalizar_e_corrigir(sessao, simulado_id=sim.id, solicitante=gestor)
             criados += 1
 
         # 1 liberado (em andamento, respostas parciais)
@@ -352,8 +354,8 @@ def _semear_simulados(sessao, gestor, turmas, alunos, rng):
             f"Simulado Matemática {turma.nome} — Em andamento",
             quantidade=8, seed=seed_base + ti * 10 + 5,
         )
-        simulado_service.gerar_e_persistir(sessao, simulado_id=sim.id, seed=sim.id)
-        simulado_service.liberar(sessao, simulado_id=sim.id)
+        simulado_service.gerar_e_persistir(sessao, simulado_id=sim.id, solicitante=gestor, seed=sim.id)
+        simulado_service.liberar(sessao, simulado_id=sim.id, solicitante=gestor)
         _responder(sessao, sim.id, alunos_turma, rng, completo=False)
         criados += 1
 
@@ -363,7 +365,7 @@ def _semear_simulados(sessao, gestor, turmas, alunos, rng):
             f"Simulado Matemática {turma.nome} — Pronto",
             quantidade=8, seed=seed_base + ti * 10 + 6,
         )
-        simulado_service.gerar_e_persistir(sessao, simulado_id=sim.id, seed=sim.id)
+        simulado_service.gerar_e_persistir(sessao, simulado_id=sim.id, solicitante=gestor, seed=sim.id)
         criados += 1
 
         # 1 rascunho
