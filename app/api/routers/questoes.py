@@ -101,3 +101,37 @@ def cadastrar_questao(
         adaptacoes=req.adaptacoes,
     )
     return _serializar(questao)
+
+
+class EditarQuestaoRequest(BaseModel):
+    enunciado: str | None = None
+    serie: str | None = None
+    materia: str | None = None
+    conteudo: str | None = None
+    nivel: str | None = None
+    adaptacoes: list[str] | None = None
+    alternativas: list[AlternativaIn] | None = None
+
+
+@router.get(
+    "/{questao_id}",
+    summary="Ver uma questão (com gabarito)",
+    dependencies=[Depends(require_gestor)],
+)
+def obter_questao(questao_id: int, sessao: Session = Depends(get_session)) -> dict:
+    return _serializar(questao_service.buscar_questao(sessao, questao_id))
+
+
+@router.patch(
+    "/{questao_id}",
+    summary="Editar uma questão (parcial)",
+    dependencies=[Depends(require_gestor)],
+)
+def editar_questao(
+    questao_id: int,
+    req: EditarQuestaoRequest,
+    sessao: Session = Depends(get_session),
+) -> dict:
+    dados = req.model_dump(exclude_unset=True)
+    questao = questao_service.editar_questao(sessao, questao_id, **dados)
+    return _serializar(questao)

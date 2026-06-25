@@ -88,3 +88,82 @@ def cadastrar_questao(
     sessao.commit()
     sessao.refresh(questao)
     return questao
+
+
+def buscar_questao(sessao: Session, questao_id: int) -> Questao:
+    questao = sessao.get(Questao, questao_id)
+    if questao is None:
+        raise NaoEncontrado(f"questão {questao_id} não encontrada")
+    return questao
+
+
+def editar_questao(
+    sessao: Session,
+    questao_id: int,
+    *,
+    enunciado: str | None = None,
+    serie: str | None = None,
+    materia: str | None = None,
+    conteudo: str | None = None,
+    nivel: str | None = None,
+    alternativas: list[dict] | None = None,
+    adaptacoes: list[str] | None = None,
+) -> Questao:
+    """Edição parcial: só os campos informados mudam. Alternativas, se vierem,
+    substituem o conjunto inteiro (revalidado)."""
+    questao = buscar_questao(sessao, questao_id)
+
+    if enunciado is not None:
+        texto = enunciado.strip()
+        if not texto:
+            raise DadosInvalidos("enunciado é obrigatório")
+        questao.enunciado = texto
+
+    if serie is not None:
+        serie_obj = etiqueta_repository.serie_por_nome(sessao, serie)
+        if serie_obj is None:
+            raise NaoEncontrado(f"série inexistente: '{serie}'")
+        questao.serie = serie_obj
+
+    if nivel is not None:
+        nivel_obj = etiqueta_repository.nivel_por_nome(sessao, nivel)
+        if nivel_obj is None:
+            raise NaoEncontrado(f"nível inexistente: '{nivel}'")
+        questao.nivel = nivel_obj
+
+    # Matéria e conteúdo são acoplados (o conteúdo pertence a uma matéria).
+    if materia is not None or conteudo is not None:
+        materia_obj = questao.materia
+        if materia is not None:
+            materia_obj = etiqueta_repository.materia_por_nome(sessao, materia)
+            if materia_obj is None:
+                materia_obj = Materia(nome=materia.strip())
+                sessao.add(materia_obj)
+                sessao.flush()
+        if conteudo is not None:
+            conteudo_nome = conteudo.strip()
+            if not conteudo_nome:
+                raise DadosInvalidos("conteúdo é obrigatório")
+            conteudo_obj = etiqueta_repository.conteudo_por_nome(
+                sessao, conteudo_nome, materia_obj.id
+            )
+            if conteudo_obj is None:
+                conteudo_obj = Conteudo(nome=conteudo_nome, materia=materia_obj)
+                sessao.add(conteudo_obj)
+                sessao.flush()
+        elif materia_obj.id != questao.materia_id:
+            raise DadosInvalidos("ao trocar a matéria, informe também o conteúdo")
+        else:
+            conteudo_obj = questao.conteudo
+        questao.materia = materia_obj
+        questao.conteudo = conteudo_obj
+
+    if adaptacoes is not None:
+        questao.adaptacoes = adaptacoes
+
+    if alternativas is not None:
+        questao.alternativas = _validar_alternativas(alternativas)
+
+    sessao.commit()
+    sessao.refresh(questao)
+    return questao
