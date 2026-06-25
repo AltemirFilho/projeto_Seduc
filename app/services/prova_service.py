@@ -97,6 +97,7 @@ def gerar_prova(
     quantidade: int = 10,
     adaptacoes: Optional[Sequence[str]] = None,
     seed: Optional[int] = None,
+    selecao_ids: Optional[Sequence[int]] = None,
 ) -> Prova:
     if quantidade < 1:
         raise DadosInvalidos("a quantidade de questões deve ser pelo menos 1")
@@ -121,13 +122,22 @@ def gerar_prova(
             codigo="sem_questoes",
         )
 
-    if distribuicao:
-        selecionadas = _selecionar_por_distribuicao(
-            candidatas, distribuicao, quantidade, rng
-        )
-    else:
-        rng.shuffle(candidatas)
-        selecionadas = candidatas[:quantidade]
+    # Seleção curada por IA (quando informada): usa exatamente esses IDs, na ordem dada.
+    # Os IDs já foram validados contra estas mesmas candidatas pelo ia_curadoria_service;
+    # ainda assim filtramos aqui por segurança. Se nada casar, cai na seleção clássica.
+    selecionadas: list[Questao] = []
+    if selecao_ids:
+        por_id = {q.id: q for q in candidatas}
+        selecionadas = [por_id[i] for i in selecao_ids if i in por_id]
+
+    if not selecionadas:
+        if distribuicao:
+            selecionadas = _selecionar_por_distribuicao(
+                candidatas, distribuicao, quantidade, rng
+            )
+        else:
+            rng.shuffle(candidatas)
+            selecionadas = candidatas[:quantidade]
 
     questoes_prova: list[QuestaoProva] = []
     contagem_nivel: dict[str, int] = {}

@@ -4,3 +4,4 @@ uvicorn[standard]>=0.29
 PyJWT>=2.8
 pydantic-settings>=2.2
 alembic>=1.13
+anthropic>=0.40  # curadoria de simulado por IA (Frente B); usada só quando habilitada

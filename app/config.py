@@ -41,6 +41,19 @@ class Settings(BaseSettings):
     )
     demo_habilitado: bool = False
 
+    # --- Curadoria de simulado por IA (Claude API) ---
+    # Desligada por padrão: sem flag e sem chave, gerar_e_persistir usa a seleção
+    # clássica do prova_service. Nada muda no comportamento atual.
+    ia_curadoria_habilitada: bool = False
+    anthropic_api_key: str = ""
+    claude_modelo: str = "claude-opus-4-8"
+    claude_timeout_segundos: float = 20.0
+    claude_max_retries: int = 2
+    # Abaixo deste nível de confiança devolvido pela IA, cai no fallback clássico.
+    ia_curadoria_confianca_minima: float = 0.5
+    # Teto de questões candidatas enviadas à IA (controle de custo/tokens).
+    ia_curadoria_max_candidatas: int = 200
+
     @property
     def em_producao(self) -> bool:
         return self.ambiente.strip().lower() in {"producao", "production", "prod"}

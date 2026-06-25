@@ -9,7 +9,7 @@ from app.enums import StatusSimulado
 from app.exceptions import DadosInvalidos, NaoEncontrado, RegraNegocio
 from app.models import Alternativa, Resposta, Simulado, SimuladoQuestao
 from app.repositories import questao_repository
-from app.services import prova_service
+from app.services import ia_curadoria_service, prova_service
 
 LETRAS = "ABCDE"
 
@@ -55,6 +55,20 @@ def gerar_e_persistir(
     if not p.get("serie") or not (p.get("materia") or p.get("materias")):
         raise DadosInvalidos("parâmetros do simulado precisam de 'serie' e 'materia(s)'")
 
+    # Curadoria por IA (quando habilitada): a IA escolhe e ordena as questões; em
+    # timeout/erro/baixa confiança, selecao_ids volta None e o prova_service usa a
+    # seleção clássica. A meta registra qual fonte foi usada.
+    selecao_ids, curadoria_meta = ia_curadoria_service.selecionar_questoes(
+        sessao,
+        serie=p["serie"],
+        materia=p.get("materia"),
+        materias=p.get("materias"),
+        conteudos=p.get("conteudos"),
+        distribuicao=p.get("distribuicao"),
+        quantidade=p.get("quantidade", 10),
+        adaptacoes=p.get("adaptacoes"),
+    )
+
     prova = prova_service.gerar_prova(
         sessao,
         serie=p["serie"],
@@ -65,7 +79,12 @@ def gerar_e_persistir(
         quantidade=p.get("quantidade", 10),
         adaptacoes=p.get("adaptacoes"),
         seed=seed if seed is not None else p.get("seed"),
+        selecao_ids=selecao_ids,
     )
+
+    # Registra a fonte da curadoria nos parâmetros (reatribui o dict para o SQLAlchemy
+    # detectar a mudança na coluna JSON). Aditivo: não altera o shape do contrato.
+    simulado.parametros_json = {**p, "ia_curadoria": curadoria_meta}
 
     simulado.questoes.clear()
     sessao.flush()
