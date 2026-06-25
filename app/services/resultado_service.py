@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from app.exceptions import NaoEncontrado, PermissaoNegada
+from app.enums import StatusSimulado
+from app.exceptions import NaoEncontrado, PermissaoNegada, RegraNegocio
 from app.repositories import resultado_repository, usuario_repository
 
 
@@ -20,8 +21,16 @@ def meu_resultado(sessao: Session, *, usuario_id: int, simulado_id: int) -> dict
         )
 
     simulado = resultado_repository.buscar_simulado(sessao, simulado_id)
-    if simulado is None:
+    if simulado is None or simulado.turma_id != aluno.turma_id:
+        # Nao revela simulado de outra turma (404 em vez de vazar titulo/status).
         raise NaoEncontrado(f"simulado {simulado_id} não encontrado")
+    if simulado.status is not StatusSimulado.FINALIZADO:
+        # Gabarito/acerto so depois da correcao: impede o aluno de espiar o
+        # gabarito (e corrigir respostas) com a prova ainda aberta (LIBERADO).
+        raise RegraNegocio(
+            "o resultado fica disponível após a finalização do simulado",
+            codigo="simulado_nao_finalizado",
+        )
 
     respostas = resultado_repository.respostas_do_aluno(sessao, aluno.id, simulado_id)
     total_questoes = resultado_repository.contar_questoes_simulado(sessao, simulado_id)
