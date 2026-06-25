@@ -7,7 +7,15 @@ from sqlalchemy.orm import Session
 
 from app.enums import PerfilUsuario, StatusSimulado
 from app.exceptions import DadosInvalidos, NaoEncontrado, PermissaoNegada, RegraNegocio
-from app.models import Aluno, Alternativa, Resposta, Simulado, SimuladoQuestao, Usuario
+from app.models import (
+    Aluno,
+    Alternativa,
+    Resposta,
+    ResultadoSimulado,
+    Simulado,
+    SimuladoQuestao,
+    Usuario,
+)
 from app.repositories import questao_repository, usuario_repository
 from app.services import ia_curadoria_service, prova_service
 
@@ -282,11 +290,43 @@ def registrar_resposta(
     return resposta
 
 
+def _retorno_resultado(
+    simulado_id: int, total_questoes: int, resultados: list[ResultadoSimulado]
+) -> dict:
+    return {
+        "simulado_id": simulado_id,
+        "total_questoes": total_questoes,
+        "alunos_avaliados": len(resultados),
+        "resultados": [
+            {
+                "aluno_id": r.aluno_id,
+                "acertos": r.acertos,
+                "respondidas": r.respondidas,
+                "total_questoes": r.total_questoes,
+                "nota": r.nota,
+            }
+            for r in resultados
+        ],
+    }
+
+
 def finalizar_e_corrigir(
     sessao: Session, *, simulado_id: int, solicitante: Usuario
 ) -> dict:
     simulado = _obter_simulado(sessao, simulado_id)
     exigir_dono(simulado, solicitante)
+
+    # Idempotente: já finalizado devolve o resultado persistido, sem recalcular.
+    if simulado.status == StatusSimulado.FINALIZADO:
+        persistidos = list(
+            sessao.scalars(
+                select(ResultadoSimulado).where(
+                    ResultadoSimulado.simulado_id == simulado_id
+                )
+            )
+        )
+        return _retorno_resultado(simulado_id, len(simulado.questoes), persistidos)
+
     if simulado.status != StatusSimulado.LIBERADO:
         raise RegraNegocio(
             "só é possível finalizar um simulado que esteja LIBERADO"
@@ -304,28 +344,32 @@ def finalizar_e_corrigir(
         if r.correta:
             d["acertos"] += 1
 
-    resultados = []
+    # Upsert do resultado por aluno (a correção fica persistida, não só calculada na hora).
+    existentes = {
+        res.aluno_id: res
+        for res in sessao.scalars(
+            select(ResultadoSimulado).where(
+                ResultadoSimulado.simulado_id == simulado_id
+            )
+        )
+    }
+    resultados: list[ResultadoSimulado] = []
     for aluno_id, d in por_aluno.items():
         nota = round(10 * d["acertos"] / total_questoes, 2) if total_questoes else 0.0
-        resultados.append(
-            {
-                "aluno_id": aluno_id,
-                "acertos": d["acertos"],
-                "respondidas": d["respondidas"],
-                "total_questoes": total_questoes,
-                "nota": nota,
-            }
-        )
+        res = existentes.get(aluno_id)
+        if res is None:
+            res = ResultadoSimulado(simulado_id=simulado_id, aluno_id=aluno_id)
+            sessao.add(res)
+        res.acertos = d["acertos"]
+        res.respondidas = d["respondidas"]
+        res.total_questoes = total_questoes
+        res.nota = nota
+        resultados.append(res)
 
     simulado.status = StatusSimulado.FINALIZADO
     sessao.commit()
 
-    return {
-        "simulado_id": simulado_id,
-        "total_questoes": total_questoes,
-        "alunos_avaliados": len(resultados),
-        "resultados": resultados,
-    }
+    return _retorno_resultado(simulado_id, total_questoes, resultados)
 
 
 def _exigir_editavel(simulado: Simulado) -> None:

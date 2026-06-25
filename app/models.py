@@ -421,3 +421,46 @@ class DiagnosticoTurma(Base):
             f"DiagnosticoTurma(simulado_id={self.simulado_id}, "
             f"modelo={self.modelo_versao!r})"
         )
+
+
+class ResultadoSimulado(Base):
+    """Resultado por aluno de um simulado FINALIZADO (correção persistida).
+
+    Gravado quando o gestor finaliza o simulado: 1 linha por (simulado, aluno). Torna a
+    correção idempotente (re-finalizar devolve o mesmo resultado) e dá base estável para
+    o relatório da turma e o "meu-resultado" do aluno, sem recalcular a cada leitura.
+    """
+
+    __tablename__ = "resultados_simulado"
+    __table_args__ = (
+        UniqueConstraint(
+            "simulado_id", "aluno_id", name="uq_resultado_simulado_aluno"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    simulado_id: Mapped[int] = mapped_column(
+        ForeignKey("simulados.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    aluno_id: Mapped[int] = mapped_column(
+        ForeignKey("alunos.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    acertos: Mapped[int] = mapped_column(Integer, nullable=False)
+    respondidas: Mapped[int] = mapped_column(Integer, nullable=False)
+    total_questoes: Mapped[int] = mapped_column(Integer, nullable=False)
+    nota: Mapped[float] = mapped_column(Float, nullable=False)
+    finalizado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    simulado: Mapped["Simulado"] = relationship()
+    aluno: Mapped["Aluno"] = relationship()
+
+    def __repr__(self) -> str:
+        return (
+            f"ResultadoSimulado(simulado_id={self.simulado_id}, "
+            f"aluno_id={self.aluno_id}, nota={self.nota})"
+        )
