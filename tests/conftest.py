@@ -30,6 +30,15 @@ from app.services import auth_service
 SENHA = "sedu123"
 
 
+@pytest.fixture(autouse=True)
+def _ia_curadoria_desligada(monkeypatch):
+    """Os testes nunca chamam a Claude API de verdade, mesmo que o `.env` local
+    tenha a curadoria habilitada. Cada teste de IA liga o que precisa via monkeypatch."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "ia_curadoria_habilitada", False)
+
+
 @pytest.fixture()
 def engine_teste():
     engine = create_engine(

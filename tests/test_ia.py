@@ -38,8 +38,16 @@ def _ids_candidatas(Sessao):
         return [q.id for q in cands]
 
 
-def test_disponivel_falso_por_padrao():
-    # Sem flag e sem chave, a IA fica indisponível e o backend usa o fallback clássico.
+def test_disponivel_so_com_flag_e_chave(monkeypatch):
+    from app.config import settings
+
+    # Flag desligada: indisponível (e o backend usa o fallback clássico).
+    monkeypatch.setattr(settings, "ia_curadoria_habilitada", False)
+    assert claude_mod.disponivel() is False
+
+    # Flag ligada mas sem chave: ainda indisponível.
+    monkeypatch.setattr(settings, "ia_curadoria_habilitada", True)
+    monkeypatch.setattr(settings, "anthropic_api_key", "")
     assert claude_mod.disponivel() is False
 
 
