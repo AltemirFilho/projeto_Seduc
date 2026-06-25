@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import random
 from dataclasses import dataclass, field
 from typing import Optional, Sequence
@@ -8,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.exceptions import DadosInvalidos, RegraNegocio
 from app.models import Questao
-from app.repositories import questao_repository
+from app.repositories import etiqueta_repository, questao_repository
 
 LETRAS = "ABCDE"
 MAX_ALTERNATIVAS = len(LETRAS)
@@ -49,7 +50,15 @@ def _validar_distribuicao(distribuicao: dict[str, float]) -> None:
     if not isinstance(distribuicao, dict) or not distribuicao:
         raise DadosInvalidos("distribuição inválida")
     for nivel, proporcao in distribuicao.items():
-        if not isinstance(proporcao, (int, float)) or proporcao < 0:
+        # bool é subclasse de int: barramos explicitamente. math.isfinite descarta NaN e
+        # infinito, que passariam batido pela checagem de soma (NaN != NaN) e estourariam
+        # depois em round(NaN) — virando um 500 em vez de um 422 claro.
+        if (
+            isinstance(proporcao, bool)
+            or not isinstance(proporcao, (int, float))
+            or not math.isfinite(proporcao)
+            or proporcao < 0
+        ):
             raise DadosInvalidos(f"proporção inválida para o nível '{nivel}'")
     soma = sum(distribuicao.values())
     if abs(soma - 1.0) > 0.01:
@@ -103,6 +112,17 @@ def gerar_prova(
         raise DadosInvalidos("a quantidade de questões deve ser pelo menos 1")
     if distribuicao:
         _validar_distribuicao(distribuicao)
+        # As chaves precisam casar EXATAMENTE com os níveis do banco. Sem isto, um typo
+        # como 'Facil' (sem acento) era ignorado em silêncio e a prova saía aleatória,
+        # parecendo balanceada.
+        niveis_validos = {n.nome for n in etiqueta_repository.listar_niveis(sessao)}
+        desconhecidos = sorted(k for k in distribuicao if k not in niveis_validos)
+        if desconhecidos:
+            raise DadosInvalidos(
+                "nível(is) desconhecido(s) na distribuição: "
+                f"{', '.join(desconhecidos)}. "
+                f"Use exatamente: {', '.join(sorted(niveis_validos))}."
+            )
 
     rng = random.Random(seed)
     materias_filtro = list(materias) if materias else ([materia] if materia else [])
@@ -120,6 +140,14 @@ def gerar_prova(
             "Nenhuma questão encontrada para os filtros informados. "
             "Verifique série/matérias/conteúdos ou popule o banco.",
             codigo="sem_questoes",
+        )
+    # Menos candidatas que o pedido gerava uma prova mais curta em silêncio. Falhamos
+    # claro: melhor o gestor saber do que aplicar uma prova com menos questões sem querer.
+    if len(candidatas) < quantidade:
+        raise RegraNegocio(
+            f"apenas {len(candidatas)} questão(ões) disponível(is) para os filtros, "
+            f"mas {quantidade} foram solicitadas. Reduza a quantidade ou amplie os filtros.",
+            codigo="questoes_insuficientes",
         )
 
     # Seleção curada por IA (quando informada): usa exatamente esses IDs, na ordem dada.

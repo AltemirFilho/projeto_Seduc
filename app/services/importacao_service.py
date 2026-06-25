@@ -34,6 +34,8 @@ def _validar_e_construir(sessao: Session, q: dict) -> Questao:
         raise ValueError("enunciado ausente ou vazio")
 
     etiquetas = q.get("etiquetas") or {}
+    if not isinstance(etiquetas, dict):
+        raise ValueError("campo 'etiquetas' deve ser um objeto")
     faltando = [c for c in CAMPOS_ETIQUETA if not etiquetas.get(c)]
     if faltando:
         raise ValueError(f"etiqueta(s) obrigatória(s) ausente(s): {', '.join(faltando)}")
@@ -66,6 +68,8 @@ def _validar_e_construir(sessao: Session, q: dict) -> Questao:
         raise ValueError(
             f"a questão excede o máximo de {MAX_ALTERNATIVAS} alternativas"
         )
+    if any(not isinstance(a, dict) for a in alternativas_raw):
+        raise ValueError("cada alternativa deve ser um objeto")
 
     corretas = [a for a in alternativas_raw if a.get("correta")]
     if len(corretas) == 0:
