@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.exceptions import DadosInvalidos, NaoEncontrado
-from app.models import Alternativa, Conteudo, Materia, Questao
+from app.exceptions import DadosInvalidos, NaoEncontrado, RegraNegocio
+from app.models import Alternativa, Conteudo, Materia, Questao, Resposta
 from app.repositories import etiqueta_repository
 
 MAX_ALTERNATIVAS = 5
@@ -57,9 +58,10 @@ def cadastrar_questao(
 
     objs_alt = _validar_alternativas(alternativas)
 
-    materia_obj = etiqueta_repository.materia_por_nome(sessao, materia)
+    materia_nome = (materia or "").strip()
+    materia_obj = etiqueta_repository.materia_por_nome(sessao, materia_nome)
     if materia_obj is None:
-        materia_obj = Materia(nome=materia.strip())
+        materia_obj = Materia(nome=materia_nome)
         sessao.add(materia_obj)
         sessao.flush()
 
@@ -135,9 +137,10 @@ def editar_questao(
     if materia is not None or conteudo is not None:
         materia_obj = questao.materia
         if materia is not None:
-            materia_obj = etiqueta_repository.materia_por_nome(sessao, materia)
+            materia_nome = materia.strip()
+            materia_obj = etiqueta_repository.materia_por_nome(sessao, materia_nome)
             if materia_obj is None:
-                materia_obj = Materia(nome=materia.strip())
+                materia_obj = Materia(nome=materia_nome)
                 sessao.add(materia_obj)
                 sessao.flush()
         if conteudo is not None:
@@ -162,6 +165,14 @@ def editar_questao(
         questao.adaptacoes = adaptacoes
 
     if alternativas is not None:
+        em_uso = sessao.scalar(
+            select(Resposta.id).where(Resposta.questao_id == questao_id).limit(1)
+        )
+        if em_uso is not None:
+            raise RegraNegocio(
+                "não é possível trocar as alternativas de uma questão já respondida",
+                codigo="questao_em_uso",
+            )
         questao.alternativas = _validar_alternativas(alternativas)
 
     sessao.commit()

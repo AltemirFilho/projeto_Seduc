@@ -1,3 +1,9 @@
+from sqlalchemy import select
+
+from app.enums import StatusSimulado
+from app.models import Aluno, Questao, Resposta, Simulado, Usuario
+
+
 def _id_primeira_questao(client, headers):
     r = client.get("/questoes", headers=headers)
     assert r.status_code == 200, r.text
@@ -85,3 +91,77 @@ def test_editar_aluno_barrado(client, h_aluno):
 def test_editar_questao_inexistente(client, h_gestor):
     r = client.patch("/questoes/99999", headers=h_gestor, json={"enunciado": "x"})
     assert r.status_code == 404
+
+
+def _semear_resposta(s, dados):
+    """Cria um simulado e uma resposta do aluno para a 1a questao; retorna o id dela."""
+    q = s.scalars(select(Questao).order_by(Questao.id)).first()
+    u = s.scalars(select(Usuario).where(Usuario.email == "aluno@x.gov.br")).one()
+    aluno = s.scalars(select(Aluno).where(Aluno.usuario_id == u.id)).one()
+    sim = Simulado(
+        gestor_id=dados["gestor_id"],
+        turma_id=dados["turma_id"],
+        titulo="S",
+        status=StatusSimulado.LIBERADO,
+    )
+    s.add(sim)
+    s.flush()
+    s.add(
+        Resposta(
+            aluno_id=aluno.id,
+            simulado_id=sim.id,
+            questao_id=q.id,
+            alternativa_id=q.alternativas[0].id,
+            correta=True,
+        )
+    )
+    s.commit()
+    return q.id
+
+
+def test_editar_alternativas_de_questao_respondida_409(client, h_gestor, Sessao, dados):
+    with Sessao() as s:
+        qid = _semear_resposta(s, dados)
+    r = client.patch(
+        f"/questoes/{qid}",
+        headers=h_gestor,
+        json={"alternativas": [
+            {"texto": "x", "correta": True},
+            {"texto": "y", "correta": False},
+        ]},
+    )
+    assert r.status_code == 409
+    assert r.json()["codigo"] == "questao_em_uso"
+
+
+def test_editar_materia_com_espacos_reaproveita(client, h_gestor):
+    # ' Matematica ' deve casar com 'Matemática' existente (strip antes do lookup),
+    # sem tentar criar duplicata (que estouraria 500 no unique).
+    qid = _id_primeira_questao(client, h_gestor)
+    r = client.patch(
+        f"/questoes/{qid}",
+        headers=h_gestor,
+        json={"materia": " Matemática ", "conteudo": "Teste"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["materia"] == "Matemática"
+
+
+def test_editar_mais_de_5_alternativas_422(client, h_gestor):
+    qid = _id_primeira_questao(client, h_gestor)
+    alts = [{"texto": str(i), "correta": i == 0} for i in range(6)]
+    r = client.patch(f"/questoes/{qid}", headers=h_gestor, json={"alternativas": alts})
+    assert r.status_code == 422
+
+
+def test_editar_troca_materia_e_conteudo_ok(client, h_gestor):
+    qid = _id_primeira_questao(client, h_gestor)
+    r = client.patch(
+        f"/questoes/{qid}",
+        headers=h_gestor,
+        json={"materia": "Ciências", "conteudo": "Energia"},
+    )
+    assert r.status_code == 200, r.text
+    corpo = r.json()
+    assert corpo["materia"] == "Ciências"
+    assert corpo["conteudo"] == "Energia"
