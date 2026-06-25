@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_session, require_gestor
+from app.models import Usuario
 from app.services import diagnostico_service, predicao_service
 
 router = APIRouter(prefix="/ia", tags=["ia"])
@@ -9,11 +10,16 @@ router = APIRouter(prefix="/ia", tags=["ia"])
 
 @router.get(
     "/risco/{aluno_id}",
-    summary="Risco de evasão do aluno: calcula, salva e devolve (gestor)",
-    dependencies=[Depends(require_gestor)],
+    summary="Risco de evasão do aluno: calcula, salva e devolve (gestor da turma)",
 )
-def risco_do_aluno(aluno_id: int, sessao: Session = Depends(get_session)) -> dict:
-    predicao = predicao_service.calcular_risco(sessao, aluno_id=aluno_id)
+def risco_do_aluno(
+    aluno_id: int,
+    solicitante: Usuario = Depends(require_gestor),
+    sessao: Session = Depends(get_session),
+) -> dict:
+    predicao = predicao_service.calcular_risco(
+        sessao, aluno_id=aluno_id, solicitante=solicitante
+    )
     return {
         "aluno_id": predicao.aluno_id,
         "score_risco": predicao.score_risco,
@@ -28,13 +34,16 @@ def risco_do_aluno(aluno_id: int, sessao: Session = Depends(get_session)) -> dic
 
 @router.get(
     "/diagnostico/{simulado_id}",
-    summary="Diagnóstico pedagógico da turma num simulado finalizado (gestor)",
-    dependencies=[Depends(require_gestor)],
+    summary="Diagnóstico pedagógico da turma num simulado finalizado (gestor dono)",
 )
 def diagnostico_da_turma(
-    simulado_id: int, sessao: Session = Depends(get_session)
+    simulado_id: int,
+    solicitante: Usuario = Depends(require_gestor),
+    sessao: Session = Depends(get_session),
 ) -> dict:
-    diagnostico = diagnostico_service.gerar_diagnostico(sessao, simulado_id=simulado_id)
+    diagnostico = diagnostico_service.gerar_diagnostico(
+        sessao, simulado_id=simulado_id, solicitante=solicitante
+    )
     return {
         "simulado_id": diagnostico.simulado_id,
         "resumo": diagnostico.resumo,

@@ -145,3 +145,48 @@ def test_aluno_so_responde_simulado_da_propria_turma(client, h_gestor, dados, ce
     )
     assert r.status_code == 403
     assert r.json()["codigo"] == "fora_da_turma"
+
+
+# --- Isolamento dos endpoints de IA (mesma família: posse do simulado e turma do aluno) ---
+
+
+def _simulado_finalizado(client, headers, h_aluno, turma_id):
+    sid = _cria_e_gera(client, headers, turma_id)
+    client.post(f"/simulados/{sid}/liberar", headers=headers, json={})
+    prev = client.get(f"/simulados/{sid}/preview", headers=headers).json()["questoes"]
+    for q in prev:
+        alt = next(a for a in q["alternativas"] if a["correta"])
+        client.post(
+            "/respostas",
+            headers=h_aluno,
+            json={"simulado_id": sid, "questao_id": q["questao_id"], "alternativa_id": alt["alternativa_id"]},
+        )
+    client.post(f"/simulados/{sid}/finalizar", headers=headers, json={})
+    return sid
+
+
+def _aluno_id(Sessao, email):
+    with Sessao() as s:
+        usuario = s.scalar(select(Usuario).where(Usuario.email == email))
+        aluno = s.scalar(select(Aluno).where(Aluno.usuario_id == usuario.id))
+        return aluno.id
+
+
+def test_diagnostico_so_do_gestor_dono(client, h_gestor, h_aluno, dados, cenario_b):
+    sid = _simulado_finalizado(client, h_gestor, h_aluno, dados["turma_id"])
+    hb = _headers(client, "gestorb@x.gov.br")
+    assert client.get(f"/ia/diagnostico/{sid}", headers=hb).status_code == 403
+    assert client.get(f"/ia/diagnostico/{sid}", headers=_headers(client, "admin@x.gov.br")).status_code == 200
+    assert client.get(f"/ia/diagnostico/{sid}", headers=h_gestor).status_code == 200  # dono
+
+
+def test_risco_so_de_aluno_de_turma_acompanhada(client, h_gestor, h_aluno, dados, cenario_b, Sessao):
+    # Gestor A acompanha a turma A (tem simulado nela); Gestor B não.
+    _simulado_finalizado(client, h_gestor, h_aluno, dados["turma_id"])
+    aluno_a = _aluno_id(Sessao, "aluno@x.gov.br")
+    hb = _headers(client, "gestorb@x.gov.br")
+    r = client.get(f"/ia/risco/{aluno_a}", headers=hb)
+    assert r.status_code == 403
+    assert r.json()["codigo"] == "fora_da_turma"
+    assert client.get(f"/ia/risco/{aluno_a}", headers=_headers(client, "admin@x.gov.br")).status_code == 200
+    assert client.get(f"/ia/risco/{aluno_a}", headers=h_gestor).status_code == 200  # dono da turma

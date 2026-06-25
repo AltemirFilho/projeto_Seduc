@@ -50,6 +50,12 @@ def _responde_tudo_certo(client, h_gestor, h_aluno, sid):
 
 def test_risco_indeterminado_sem_simulados(client, h_gestor, dados, Sessao):
     # Turma ainda sem simulados liberados/finalizados: não dá para prever.
+    # Um rascunho estabelece o vínculo gestor-turma sem tornar a turma "avaliável".
+    client.post(
+        "/simulados",
+        headers=h_gestor,
+        json={"turma_id": dados["turma_id"], "titulo": "Rascunho", "serie": "9º ano", "materia": "Matemática"},
+    )
     aluno_id = _aluno_id(Sessao, "aluno@x.gov.br")
     r = client.get(f"/ia/risco/{aluno_id}", headers=h_gestor)
     assert r.status_code == 200, r.text

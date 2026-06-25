@@ -15,6 +15,19 @@ def respostas_do_aluno(sessao: Session, aluno_id: int) -> list[Resposta]:
     )
 
 
+def gestor_tem_simulado_na_turma(
+    sessao: Session, *, gestor_id: int, turma_id: int
+) -> bool:
+    """Vínculo do gestor com a turma, derivado sem schema novo: o gestor é responsável
+    pela turma se já criou algum simulado nela (qualquer status)."""
+    stmt = (
+        select(Simulado.id)
+        .where(Simulado.gestor_id == gestor_id, Simulado.turma_id == turma_id)
+        .limit(1)
+    )
+    return sessao.scalar(stmt) is not None
+
+
 def simulados_avaliaveis_da_turma(sessao: Session, turma_id: int) -> list[Simulado]:
     """Simulados que já foram oportunidade real de participação (liberados ou
     finalizados), com as questões carregadas para contar o total de cada um."""

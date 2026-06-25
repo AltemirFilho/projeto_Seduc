@@ -21,7 +21,7 @@ def _obter_simulado(sessao: Session, simulado_id: int) -> Simulado:
     return simulado
 
 
-def _exigir_dono(simulado: Simulado, solicitante: Usuario) -> None:
+def exigir_dono(simulado: Simulado, solicitante: Usuario) -> None:
     """Só o gestor que criou o simulado (ou um admin) pode operá-lo. A autorização por
     PERFIL (require_gestor) já roda no router; aqui garantimos a POSSE do recurso, para
     um gestor não mexer no simulado de outro."""
@@ -64,7 +64,7 @@ def gerar_e_persistir(
     seed: int | None = None,
 ) -> Simulado:
     simulado = _obter_simulado(sessao, simulado_id)
-    _exigir_dono(simulado, solicitante)
+    exigir_dono(simulado, solicitante)
     if simulado.status not in (StatusSimulado.RASCUNHO, StatusSimulado.GERADO):
         raise RegraNegocio(
             f"simulado não pode ser gerado no status '{simulado.status.value}'"
@@ -125,7 +125,7 @@ def gerar_e_persistir(
 
 def liberar(sessao: Session, *, simulado_id: int, solicitante: Usuario) -> Simulado:
     simulado = _obter_simulado(sessao, simulado_id)
-    _exigir_dono(simulado, solicitante)
+    exigir_dono(simulado, solicitante)
     if simulado.status != StatusSimulado.GERADO:
         raise RegraNegocio("apenas simulados GERADOS podem ser liberados")
     simulado.status = StatusSimulado.LIBERADO
@@ -187,7 +187,7 @@ def montar_questoes_preview(
 ) -> list[dict]:
     """Prévia COM gabarito — restrita ao gestor dono (ou admin)."""
     simulado = _obter_simulado(sessao, simulado_id)
-    _exigir_dono(simulado, solicitante)
+    exigir_dono(simulado, solicitante)
     return montar_questoes(sessao, simulado_id=simulado_id, incluir_gabarito=True)
 
 
@@ -286,7 +286,7 @@ def finalizar_e_corrigir(
     sessao: Session, *, simulado_id: int, solicitante: Usuario
 ) -> dict:
     simulado = _obter_simulado(sessao, simulado_id)
-    _exigir_dono(simulado, solicitante)
+    exigir_dono(simulado, solicitante)
     if simulado.status != StatusSimulado.LIBERADO:
         raise RegraNegocio(
             "só é possível finalizar um simulado que esteja LIBERADO"
@@ -354,7 +354,7 @@ def remover_questao(
     sessao: Session, *, simulado_id: int, questao_id: int, solicitante: Usuario
 ) -> Simulado:
     simulado = _obter_simulado(sessao, simulado_id)
-    _exigir_dono(simulado, solicitante)
+    exigir_dono(simulado, solicitante)
     _exigir_editavel(simulado)
 
     alvo = next((sq for sq in simulado.questoes if sq.questao_id == questao_id), None)
@@ -383,7 +383,7 @@ def trocar_questao(
     seed: int | None = None,
 ) -> Simulado:
     simulado = _obter_simulado(sessao, simulado_id)
-    _exigir_dono(simulado, solicitante)
+    exigir_dono(simulado, solicitante)
     _exigir_editavel(simulado)
 
     alvo = next((sq for sq in simulado.questoes if sq.questao_id == questao_id), None)
