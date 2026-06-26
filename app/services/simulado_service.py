@@ -16,7 +16,12 @@ from app.models import (
     SimuladoQuestao,
     Usuario,
 )
-from app.repositories import questao_repository, usuario_repository
+from app.repositories import (
+    questao_repository,
+    resposta_repository,
+    simulado_repository,
+    usuario_repository,
+)
 from app.services import ia_curadoria_service, prova_service
 
 LETRAS = "ABCDE"
@@ -41,6 +46,103 @@ def exigir_dono(simulado: Simulado, solicitante: Usuario) -> None:
         "você não é o gestor responsável por este simulado",
         codigo="nao_e_dono",
     )
+
+
+def _status_de_str(valor: str) -> StatusSimulado:
+    try:
+        return StatusSimulado(valor)
+    except ValueError as exc:
+        raise DadosInvalidos(
+            f"status inválido: '{valor}' "
+            "(use rascunho, gerado, liberado ou finalizado)"
+        ) from exc
+
+
+def listar_para_gestor(
+    sessao: Session,
+    *,
+    solicitante: Usuario,
+    status: str | None = None,
+    turma_id: int | None = None,
+) -> list[Simulado]:
+    """Lista os simulados visíveis ao solicitante: admin vê todos; gestor vê só os seus."""
+    gestor_id = None if solicitante.perfil == PerfilUsuario.ADMIN else solicitante.id
+    estado = _status_de_str(status) if status else None
+    return simulado_repository.listar(
+        sessao, gestor_id=gestor_id, turma_id=turma_id, status=estado
+    )
+
+
+def listar_do_aluno(sessao: Session, *, solicitante: Usuario) -> list[Simulado]:
+    """Simulados da turma do aluno logado que ele pode ver (liberados e finalizados)."""
+    aluno = usuario_repository.aluno_do_usuario(sessao, solicitante.id)
+    if aluno is None:
+        raise PermissaoNegada(
+            "apenas alunos têm a lista de simulados da turma", codigo="nao_e_aluno"
+        )
+    return simulado_repository.listar(
+        sessao,
+        turma_id=aluno.turma_id,
+        statuses=[StatusSimulado.LIBERADO, StatusSimulado.FINALIZADO],
+    )
+
+
+def obter_resumo(
+    sessao: Session, *, simulado_id: int, solicitante: Usuario
+) -> Simulado:
+    """Resumo de um simulado — restrito ao gestor dono (ou admin)."""
+    simulado = _obter_simulado(sessao, simulado_id)
+    exigir_dono(simulado, solicitante)
+    return simulado
+
+
+def monitorar(sessao: Session, *, simulado_id: int, solicitante: Usuario) -> dict:
+    """Progresso ao vivo da turma num simulado, derivado das respostas já registradas.
+
+    O modelo não tem flag de "entregue"; então: 'concluido' = respondeu todas as
+    questões, 'em_andamento' = respondeu ao menos uma, 'nao_iniciou' = nenhuma.
+    """
+    simulado = _obter_simulado(sessao, simulado_id)
+    exigir_dono(simulado, solicitante)
+
+    total_questoes = len(simulado.questoes)
+    respondidas_por_aluno = resposta_repository.contar_respostas_por_aluno(
+        sessao, simulado_id
+    )
+
+    por_aluno: list[dict] = []
+    concluidos = em_andamento = nao_iniciaram = 0
+    for aluno in sorted(simulado.turma.alunos, key=lambda a: a.usuario.nome):
+        n = respondidas_por_aluno.get(aluno.id, 0)
+        if total_questoes and n >= total_questoes:
+            situacao = "concluido"
+            concluidos += 1
+        elif n > 0:
+            situacao = "em_andamento"
+            em_andamento += 1
+        else:
+            situacao = "nao_iniciou"
+            nao_iniciaram += 1
+        por_aluno.append(
+            {
+                "aluno_id": aluno.id,
+                "nome": aluno.usuario.nome,
+                "respondidas": n,
+                "total": total_questoes,
+                "situacao": situacao,
+            }
+        )
+
+    return {
+        "simulado_id": simulado_id,
+        "status": simulado.status.value,
+        "total_questoes": total_questoes,
+        "total_alunos": len(simulado.turma.alunos),
+        "concluidos": concluidos,
+        "em_andamento": em_andamento,
+        "nao_iniciaram": nao_iniciaram,
+        "por_aluno": por_aluno,
+    }
 
 
 def criar_simulado(
