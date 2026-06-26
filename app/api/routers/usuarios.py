@@ -20,6 +20,9 @@ class CriarUsuarioRequest(BaseModel):
 def _serializar(usuario: Usuario) -> dict:
     return {
         "id": usuario.id,
+        # aluno_id é o id usado pelos endpoints de aluno (ex.: /ia/risco/{aluno_id}),
+        # que difere do usuario.id; expor aqui evita o cliente confundir os dois.
+        "aluno_id": usuario.aluno.id if usuario.aluno else None,
         "nome": usuario.nome,
         "email": usuario.email,
         "perfil": usuario.perfil.value,

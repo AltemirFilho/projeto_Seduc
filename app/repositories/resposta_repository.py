@@ -39,6 +39,17 @@ def contar_alunos_da_turma(sessao: Session, turma_id: int) -> int:
     )
 
 
+def contar_respostas_por_aluno(sessao: Session, simulado_id: int) -> dict[int, int]:
+    """Quantas respostas cada aluno já registrou num simulado (base do monitoramento de
+    progresso ao vivo: respondidas/total por aluno)."""
+    stmt = (
+        select(Resposta.aluno_id, func.count(Resposta.id))
+        .where(Resposta.simulado_id == simulado_id)
+        .group_by(Resposta.aluno_id)
+    )
+    return {aluno_id: total for aluno_id, total in sessao.execute(stmt).all()}
+
+
 def resultado_do_aluno(
     sessao: Session, *, aluno_id: int, simulado_id: int
 ) -> ResultadoSimulado | None:

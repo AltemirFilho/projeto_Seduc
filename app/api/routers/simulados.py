@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -36,10 +36,39 @@ def _resumo(simulado) -> dict:
         "titulo": simulado.titulo,
         "status": simulado.status.value,
         "turma_id": simulado.turma_id,
+        "turma": simulado.turma.nome if simulado.turma else None,
         "gestor_id": simulado.gestor_id,
         "total_questoes": len(simulado.questoes),
+        "criado_em": simulado.criado_em.isoformat() if simulado.criado_em else None,
         "parametros": simulado.parametros_json,
     }
+
+
+@router.get("", summary="Listar simulados (gestão: filtra por status e turma)")
+def listar_simulados(
+    estado: str | None = Query(
+        None, alias="status", description="rascunho, gerado, liberado ou finalizado"
+    ),
+    turma_id: int | None = Query(None),
+    usuario: Usuario = Depends(require_gestor),
+    sessao: Session = Depends(get_session),
+) -> dict:
+    simulados = simulado_service.listar_para_gestor(
+        sessao, solicitante=usuario, status=estado, turma_id=turma_id
+    )
+    return {"dados": [_resumo(s) for s in simulados], "meta": {"total": len(simulados)}}
+
+
+@router.get(
+    "/disponiveis",
+    summary="Simulados liberados/finalizados da turma do aluno autenticado",
+)
+def simulados_disponiveis(
+    usuario: Usuario = Depends(obter_usuario_atual),
+    sessao: Session = Depends(get_session),
+) -> dict:
+    simulados = simulado_service.listar_do_aluno(sessao, solicitante=usuario)
+    return {"dados": [_resumo(s) for s in simulados], "meta": {"total": len(simulados)}}
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, summary="Criar simulado (gestor)")
@@ -186,3 +215,30 @@ def trocar_questao(
         sessao, simulado_id=simulado_id, solicitante=usuario
     )
     return {"simulado_id": simulado_id, "questoes": questoes}
+
+
+# NOTA: declarado depois de "/disponiveis" para não capturar a rota literal como id.
+@router.get("/{simulado_id}", summary="Resumo de um simulado (gestor dono)")
+def obter_simulado(
+    simulado_id: int,
+    usuario: Usuario = Depends(require_gestor),
+    sessao: Session = Depends(get_session),
+) -> dict:
+    simulado = simulado_service.obter_resumo(
+        sessao, simulado_id=simulado_id, solicitante=usuario
+    )
+    return _resumo(simulado)
+
+
+@router.get(
+    "/{simulado_id}/monitoramento",
+    summary="Progresso ao vivo da turma no simulado (gestor dono)",
+)
+def monitorar_simulado(
+    simulado_id: int,
+    usuario: Usuario = Depends(require_gestor),
+    sessao: Session = Depends(get_session),
+) -> dict:
+    return simulado_service.monitorar(
+        sessao, simulado_id=simulado_id, solicitante=usuario
+    )
