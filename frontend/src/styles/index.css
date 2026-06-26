@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+/* Fontes arredondadas (self-host via @fontsource) — títulos: Baloo 2; corpo: Nunito Sans */
+@import "@fontsource/baloo-2/400.css";
+@import "@fontsource/baloo-2/500.css";
+@import "@fontsource/baloo-2/600.css";
+@import "@fontsource/baloo-2/700.css";
+@import "@fontsource/nunito-sans/400.css";
+@import "@fontsource/nunito-sans/600.css";
+@import "@fontsource/nunito-sans/700.css";
+
+/* ===================================================================
+   Design system Claymorphism - tokens da paleta SEDUC (design_brief 3).
+   No Tailwind v4 cada token do @theme vira utilitario:
+   cores geram bg/text/border/ring, sombras geram shadow,
+   raios geram rounded, fontes geram font.
+   =================================================================== */
+@theme {
+  /* Superfícies */
+  --color-bg: #fefaef;            /* floral white — base quente ("barro") */
+  --color-surface: #ffffff;      /* card elevado */
+  --color-surface-sunken: #f5efda; /* campo / segmented afundado (creme) */
+
+  /* Marca */
+  --color-primary: #182350;      /* deep blue — CTA, nav ativo, sidebar, texto forte */
+  --color-primary-hover: #243463;
+  --color-on-primary: #fefaef;   /* texto/ícone sobre o azul (creme, nunca branco puro) */
+  --color-secondary: #afd2fa;    /* powder blue — info / seleção */
+  --color-secondary-ink: #1e3a6b;/* azul forte p/ texto sobre powder blue (AA) */
+  --color-accent: #b9915e;       /* pale brown — acento quente */
+  --color-accent-ink: #6e5226;   /* marrom forte p/ chip / texto (AA) */
+
+  /* Texto e linhas */
+  --color-text: #182350;         /* deep blue como texto principal (AA sobre creme) */
+  --color-text-muted: #6f6a5c;   /* taupe — texto secundário */
+  --color-line: #ece5d3;         /* divisória sutil (clay separa por sombra, não borda) */
+
+  /* Semânticas — harmonizadas com o quente */
+  --color-success: #4f9d6b;
+  --color-warning: #b9915e;
+  --color-danger: #c75d52;
+  --color-info: #afd2fa;
+
+  /* Status do simulado */
+  --color-st-rascunho: #9a927e;
+  --color-st-gerado: #5e86c2;
+  --color-st-liberado: #4f9d6b;
+  --color-st-finalizado: #182350;
+
+  /* Risco de evasão */
+  --color-risco-baixo: #4f9d6b;
+  --color-risco-medio: #b9915e;
+  --color-risco-alto: #c75d52;
+
+  /* Tipografia */
+  --font-display: "Baloo 2", "Quicksand", system-ui, sans-serif;
+  --font-sans: "Nunito Sans", Inter, system-ui, sans-serif;
+
+  /* Raios */
+  --radius-card: 24px;
+  --radius-btn: 16px;
+  --radius-input: 14px;
+  --radius-chip: 999px;
+
+  /* Assinatura clay — sombras duplas (lado escuro com tint deep-blue, quente/coeso) */
+  --shadow-clay: 12px 12px 28px rgba(24, 35, 80, 0.16),
+    -10px -10px 24px rgba(255, 255, 255, 0.95),
+    inset 2px 2px 3px rgba(255, 255, 255, 0.6),
+    inset -3px -3px 6px rgba(24, 35, 80, 0.08);
+  --shadow-clay-sm: 6px 6px 14px rgba(24, 35, 80, 0.14),
+    -6px -6px 12px rgba(255, 255, 255, 0.92);
+  --shadow-clay-inset: inset 4px 4px 10px rgba(24, 35, 80, 0.16),
+    inset -4px -4px 10px rgba(255, 255, 255, 0.95);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    color: var(--color-text);
+  }
+
+  /* Acessibilidade: respeitar quem pediu menos movimento */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

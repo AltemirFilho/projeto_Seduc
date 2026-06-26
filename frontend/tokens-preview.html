@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SEDUC Simulados — Claymorphism (preview de tokens)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700&family=Nunito+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#FEFAEF; --surface:#FFFFFF; --surface-sunken:#F5EFDA;
+  --primary:#182350; --primary-hover:#243463; --on-primary:#FEFAEF;
+  --secondary:#AFD2FA; --secondary-ink:#1E3A6B;
+  --accent:#B9915E; --accent-ink:#6E5226;
+  --text:#182350; --text-muted:#6F6A5C; --line:#ECE5D3;
+  --success:#4F9D6B; --warning:#B9915E; --danger:#C75D52; --info:#AFD2FA;
+  --clay:12px 12px 28px rgba(24,35,80,.16), -10px -10px 24px rgba(255,255,255,.95), inset 2px 2px 3px rgba(255,255,255,.6), inset -3px -3px 6px rgba(24,35,80,.08);
+  --clay-sm:6px 6px 14px rgba(24,35,80,.14), -6px -6px 12px rgba(255,255,255,.92);
+  --clay-inset:inset 4px 4px 10px rgba(24,35,80,.16), inset -4px -4px 10px rgba(255,255,255,.95);
+  --r-card:24px; --r-btn:16px; --r-input:14px; --r-chip:999px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:"Nunito Sans",system-ui,sans-serif;
+  font-size:16px;line-height:1.6;padding:40px;}
+h1,h2,h3{font-family:"Baloo 2",cursive;margin:0;color:var(--text)}
+h1{font-size:30px;font-weight:700}
+h2{font-size:20px;font-weight:600;margin:36px 0 16px}
+.muted{color:var(--text-muted)}
+.wrap{max-width:1040px;margin:0 auto}
+.row{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
+.grid{display:grid;gap:20px}
+.card{background:var(--surface);border-radius:var(--r-card);box-shadow:var(--clay);padding:24px}
+.swatch{border-radius:var(--r-card);box-shadow:var(--clay-sm);padding:18px;min-height:120px;
+  display:flex;flex-direction:column;justify-content:space-between;flex:1;min-width:180px}
+.swatch b{font-family:"Baloo 2",cursive;font-size:17px}
+.swatch code{font-size:13px;opacity:.85}
+.btn{font-family:"Nunito Sans";font-weight:700;font-size:15px;border:0;cursor:pointer;
+  border-radius:var(--r-btn);padding:13px 22px;transition:.15s;display:inline-flex;align-items:center;gap:8px}
+.btn-primary{background:var(--primary);color:var(--on-primary);box-shadow:var(--clay-sm)}
+.btn-primary:hover{background:var(--primary-hover)}
+.btn-primary:active{box-shadow:var(--clay-inset)}
+.btn-secondary{background:var(--surface);color:var(--primary);box-shadow:var(--clay-sm)}
+.btn-accent{background:var(--accent);color:#2A1E0B;box-shadow:var(--clay-sm)}
+.btn-danger{background:var(--danger);color:#fff;box-shadow:var(--clay-sm)}
+.btn-ghost{background:transparent;color:var(--primary);box-shadow:none}
+.field label{display:block;font-size:13px;font-weight:600;color:var(--text-muted);margin:0 0 8px}
+.input{width:100%;background:var(--surface-sunken);border:0;border-radius:var(--r-input);
+  box-shadow:var(--clay-inset);padding:13px 16px;font:inherit;color:var(--text)}
+.input::placeholder{color:#A9A395}
+.stat{background:var(--surface);border-radius:var(--r-card);box-shadow:var(--clay);padding:22px;flex:1;min-width:200px}
+.stat .ico{width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;
+  font-size:22px;box-shadow:var(--clay-sm);margin-bottom:14px}
+.stat .num{font-family:"Baloo 2",cursive;font-size:30px;font-weight:700;line-height:1}
+.stat .lbl{color:var(--text-muted);font-size:14px;margin-top:4px}
+.chip{display:inline-flex;align-items:center;gap:7px;border-radius:var(--r-chip);
+  padding:6px 14px;font-size:13px;font-weight:700}
+.dot{width:8px;height:8px;border-radius:50%}
+.ring{width:120px;height:120px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:conic-gradient(var(--success) 0 74%, #E7E0CE 74% 100%);box-shadow:var(--clay-sm)}
+.ring .inner{width:88px;height:88px;border-radius:50%;background:var(--surface);box-shadow:var(--clay-inset);
+  display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ring .inner b{font-family:"Baloo 2",cursive;font-size:24px;font-weight:700}
+.sidebar{background:var(--primary);color:var(--on-primary);border-radius:var(--r-card);padding:18px;
+  width:210px;box-shadow:var(--clay)}
+.sidebar .nav{padding:11px 14px;border-radius:12px;color:#C9D2EC;font-weight:600;font-size:14px;margin-bottom:4px;display:flex;gap:10px;align-items:center}
+.sidebar .nav.active{background:#26336B;color:#fff;box-shadow:inset 3px 3px 7px rgba(0,0,0,.35), inset -3px -3px 7px rgba(255,255,255,.06)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>SEDUC Simulados — Claymorphism</h1>
+  <p class="muted">Preview dos tokens do <code>design_brief.md</code> com a paleta do cliente. Tudo abaixo usa sombra dupla (clay) e a base creme.</p>
+
+  <h2>Paleta</h2>
+  <div class="row">
+    <div class="swatch" style="background:#182350;color:#FEFAEF"><b>Deep blue</b><code>#182350 · primário / sidebar / texto</code></div>
+    <div class="swatch" style="background:#AFD2FA;color:#1E3A6B"><b>Powder blue</b><code>#AFD2FA · info / seleção / chips</code></div>
+    <div class="swatch" style="background:#FEFAEF;color:#182350"><b>Floral white</b><code>#FEFAEF · base / superfícies</code></div>
+    <div class="swatch" style="background:#B9915E;color:#2A1E0B"><b>Pale brown</b><code>#B9915E · acento quente</code></div>
+  </div>
+
+  <h2>Botões &amp; campos</h2>
+  <div class="card">
+    <div class="row" style="align-items:center;margin-bottom:22px">
+      <button class="btn btn-primary">Gerar simulado</button>
+      <button class="btn btn-secondary">Ver prévia</button>
+      <button class="btn btn-accent">Diagnóstico IA</button>
+      <button class="btn btn-danger">Excluir</button>
+      <button class="btn btn-ghost">Cancelar</button>
+    </div>
+    <div class="row">
+      <div class="field" style="flex:1;min-width:240px">
+        <label>E-mail</label>
+        <input class="input" placeholder="voce@sedu.se.gov.br" />
+      </div>
+      <div class="field" style="flex:1;min-width:240px">
+        <label>Senha</label>
+        <input class="input" type="password" placeholder="••••••••" />
+      </div>
+    </div>
+  </div>
+
+  <h2>StatCards</h2>
+  <div class="row">
+    <div class="stat"><div class="ico" style="background:#E3EDFA;color:#1E3A6B">Q</div><div class="num">1.284</div><div class="lbl">Questões no banco</div></div>
+    <div class="stat"><div class="ico" style="background:#E2F0E7;color:#2F6B47">S</div><div class="num">12</div><div class="lbl">Simulados ativos</div></div>
+    <div class="stat"><div class="ico" style="background:#F1E7D6;color:#6E5226">M</div><div class="num">7,4</div><div class="lbl">Média da turma</div></div>
+  </div>
+
+  <h2>Status do simulado &amp; risco de evasão</h2>
+  <div class="card">
+    <div class="row" style="margin-bottom:18px">
+      <span class="chip" style="background:#ECEAE2;color:#6A6453"><span class="dot" style="background:#9A927E"></span>Rascunho</span>
+      <span class="chip" style="background:#E3EDFA;color:#2A4E86"><span class="dot" style="background:#5E86C2"></span>Gerado</span>
+      <span class="chip" style="background:#E2F0E7;color:#2F6B47"><span class="dot" style="background:#4F9D6B"></span>Liberado</span>
+      <span class="chip" style="background:#E4E7F1;color:#182350"><span class="dot" style="background:#182350"></span>Finalizado</span>
+    </div>
+    <div class="row">
+      <span class="chip" style="background:#E2F0E7;color:#2F6B47">Risco baixo</span>
+      <span class="chip" style="background:#F1E7D6;color:#6E5226">Risco médio</span>
+      <span class="chip" style="background:#F6E2DF;color:#8C3A31">Risco alto</span>
+    </div>
+  </div>
+
+  <h2>Composição (nota + sidebar)</h2>
+  <div class="row" style="align-items:stretch">
+    <div class="card" style="display:flex;align-items:center;gap:24px">
+      <div class="ring"><div class="inner"><b>7,4</b><span class="muted" style="font-size:12px">nota</span></div></div>
+      <div>
+        <h3 style="font-family:'Baloo 2';font-size:18px;margin-bottom:6px">Resultado do simulado</h3>
+        <p class="muted" style="margin:0">74% de acerto · 37 de 50 questões</p>
+        <div style="margin-top:14px"><button class="btn btn-primary">Ver gabarito</button></div>
+      </div>
+    </div>
+    <div class="sidebar">
+      <div style="font-family:'Baloo 2';font-weight:700;font-size:18px;margin-bottom:16px">SEDUC</div>
+      <div class="nav active">▣ Dashboard</div>
+      <div class="nav">◇ Banco de questões</div>
+      <div class="nav">▤ Simulados</div>
+      <div class="nav">◎ Turmas</div>
+      <div class="nav">▲ Relatórios</div>
+    </div>
+  </div>
+
+  <p class="muted" style="margin-top:36px;font-size:14px">Tokens espelham o <code>design_brief.md §3</code>. Ajuste qualquer cor aqui e eu replico no brief.</p>
+</div>
+</body>
+</html>
